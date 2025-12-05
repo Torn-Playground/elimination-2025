@@ -19,6 +19,11 @@ export const data = new SlashCommandBuilder()
         subcommand
             .setName('all')
             .setDescription('Verify all members who are not yet verified')
+            .addBooleanOption(option =>
+                option.setName('force')
+                    .setDescription('If true, verifies ALL members regardless of current verified status')
+                    .setRequired(false)
+            )
     );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
@@ -82,7 +87,9 @@ async function handleVerifyAll(interaction: ChatInputCommandInteraction) {
     // 1. Fetch all members (ensure cache is full)
     await interaction.guild!.members.fetch();
 
-    // 2. Filter unverified
+    const force = interaction.options.getBoolean('force') ?? false;
+
+    // 2. Filter unverified (or all if force is true)
     // We assume "Verified" role name. Ideally from config or finding it first.
     const verifiedRole = interaction.guild!.roles.cache.find(r => r.name === 'Verified');
     if (!verifiedRole) {
@@ -90,16 +97,18 @@ async function handleVerifyAll(interaction: ChatInputCommandInteraction) {
         return;
     }
 
-    const unverifiedMembers = interaction.guild!.members.cache.filter(m =>
-        !m.user.bot && !m.roles.cache.has(verifiedRole.id)
-    );
+    const membersToVerify = interaction.guild!.members.cache.filter(m => {
+        if (m.user.bot) return false;
+        if (force) return true; // Verify everyone if forced
+        return !m.roles.cache.has(verifiedRole.id); // Otherwise only unverified
+    });
 
-    if (unverifiedMembers.size === 0) {
+    if (membersToVerify.size === 0) {
         await interaction.editReply({ content: 'All eligible members are already verified!' });
         return;
     }
 
-    await interaction.editReply({ content: `Found ${unverifiedMembers.size} unverified members. Starting verification process... (This may take a while due to API limits)` });
+    await interaction.editReply({ content: `Found ${membersToVerify.size} members to verify. Starting verification process... (This may take a while due to API limits)` });
 
     let successCount = 0;
     let failCount = 0;
@@ -110,7 +119,7 @@ async function handleVerifyAll(interaction: ChatInputCommandInteraction) {
     // Or closer to limit: 1 request every 0.7 seconds (~85/min).
     // Let's go with 1s delay.
 
-    for (const [_, member] of unverifiedMembers) {
+    for (const [_, member] of membersToVerify) {
         try {
             const result = await verify(member);
             if (result.verified) {
@@ -125,9 +134,9 @@ async function handleVerifyAll(interaction: ChatInputCommandInteraction) {
         processedCount++;
 
         // Update progress every 10 members or last one
-        if (processedCount % 10 === 0 || processedCount === unverifiedMembers.size) {
+        if (processedCount % 10 === 0 || processedCount === membersToVerify.size) {
             await interaction.editReply({
-                content: `Processing: ${processedCount}/${unverifiedMembers.size}\nVerified: ${successCount}\nFailed/Unlinked: ${failCount}`
+                content: `Processing: ${processedCount}/${membersToVerify.size}\nVerified: ${successCount}\nFailed/Unlinked: ${failCount}`
             });
         }
 
