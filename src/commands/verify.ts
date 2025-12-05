@@ -1,5 +1,5 @@
-import {ChatInputCommandInteraction, GuildMember, PermissionFlagsBits, SlashCommandBuilder} from 'discord.js';
-import {verify} from '../services/verification';
+import { ChatInputCommandInteraction, GuildMember, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import { verify } from '../services/verification';
 
 export const data = new SlashCommandBuilder()
     .setName('verify')
@@ -23,7 +23,7 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction: ChatInputCommandInteraction) {
     if (!interaction.guild) {
-        await interaction.reply({content: 'This command can only be used in a server.', flags: ["Ephemeral"]});
+        await interaction.reply({ content: 'This command can only be used in a server.' });
         return;
     }
 
@@ -34,12 +34,12 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     } else if (subcommand === 'all') {
         await handleVerifyAll(interaction);
     } else {
-        await interaction.reply({content: 'Unknown subcommand.', flags: ["Ephemeral"]});
+        await interaction.reply({ content: 'Unknown subcommand.' });
     }
 }
 
 async function handleVerifyMember(interaction: ChatInputCommandInteraction) {
-    await interaction.deferReply({flags: ["Ephemeral"]});
+    await interaction.deferReply();
 
     const targetUser = interaction.options.getUser('target', true);
     let targetMember: GuildMember;
@@ -47,7 +47,7 @@ async function handleVerifyMember(interaction: ChatInputCommandInteraction) {
     try {
         targetMember = await interaction.guild!.members.fetch(targetUser.id);
     } catch (error) {
-        await interaction.editReply({content: 'Could not find that member in this server.'});
+        await interaction.editReply({ content: 'Could not find that member in this server.' });
         return;
     }
 
@@ -68,16 +68,16 @@ async function handleVerifyMember(interaction: ChatInputCommandInteraction) {
         if (!result.appliedVerifiedRole) statusLines.push('⚠ Could not add verified role.');
         if (!result.appliedTeamRole) statusLines.push('⚠ Could not apply team role.');
 
-        await interaction.editReply({content: statusLines.join('\n')});
+        await interaction.editReply({ content: statusLines.join('\n') });
 
     } catch (error) {
         console.error('Verify member error:', error);
-        await interaction.editReply({content: 'An error occurred during verification.'});
+        await interaction.editReply({ content: 'An error occurred during verification.' });
     }
 }
 
 async function handleVerifyAll(interaction: ChatInputCommandInteraction) {
-    await interaction.deferReply({flags: ["Ephemeral"]});
+    await interaction.deferReply();
 
     // 1. Fetch all members (ensure cache is full)
     await interaction.guild!.members.fetch();
@@ -86,7 +86,7 @@ async function handleVerifyAll(interaction: ChatInputCommandInteraction) {
     // We assume "Verified" role name. Ideally from config or finding it first.
     const verifiedRole = interaction.guild!.roles.cache.find(r => r.name === 'Verified');
     if (!verifiedRole) {
-        await interaction.editReply({content: 'Could not find a role named "Verified". Please create it first.'});
+        await interaction.editReply({ content: 'Could not find a role named "Verified". Please create it first.' });
         return;
     }
 
@@ -95,11 +95,11 @@ async function handleVerifyAll(interaction: ChatInputCommandInteraction) {
     );
 
     if (unverifiedMembers.size === 0) {
-        await interaction.editReply({content: 'All eligible members are already verified!'});
+        await interaction.editReply({ content: 'All eligible members are already verified!' });
         return;
     }
 
-    await interaction.editReply({content: `Found ${unverifiedMembers.size} unverified members. Starting verification process... (This may take a while due to API limits)`});
+    await interaction.editReply({ content: `Found ${unverifiedMembers.size} unverified members. Starting verification process... (This may take a while due to API limits)` });
 
     let successCount = 0;
     let failCount = 0;
@@ -136,7 +136,6 @@ async function handleVerifyAll(interaction: ChatInputCommandInteraction) {
     }
 
     await interaction.followUp({
-        content: `**Verification Complete**\nTotal Processed: ${processedCount}\nSuccessfully Verified: ${successCount}\nFailed/Unlinked: ${failCount}`,
-        flags: ["Ephemeral"]
+        content: `**Verification Complete**\nTotal Processed: ${processedCount}\nSuccessfully Verified: ${successCount}\nFailed/Unlinked: ${failCount}`
     });
 }

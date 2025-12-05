@@ -1,5 +1,5 @@
-import {ChatInputCommandInteraction, GuildMember, SlashCommandBuilder} from 'discord.js';
-import {verify} from "../services/verification";
+import { ChatInputCommandInteraction, GuildMember, SlashCommandBuilder } from 'discord.js';
+import { verify } from "../services/verification";
 
 export const data = new SlashCommandBuilder()
     .setName('v')
@@ -7,11 +7,11 @@ export const data = new SlashCommandBuilder()
 
 export async function execute(interaction: ChatInputCommandInteraction) {
     if (!interaction.guild) {
-        await interaction.reply({content: 'This command can only be used in a server.', flags: ["Ephemeral"]});
+        await interaction.reply({ content: 'This command can only be used in a server.', flags: ["Ephemeral"] });
         return;
     }
 
-    await interaction.deferReply({flags: ["Ephemeral"]});
+    await interaction.deferReply();
 
     try {
         const member = interaction.member as GuildMember;
@@ -30,9 +30,9 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         if (!result.appliedVerifiedRole) statusLines.push('⚠ Could not add verified role.');
         if (!result.appliedTeamRole) statusLines.push('⚠ Could not apply team role.');
 
-        await interaction.editReply({content: statusLines.join('\n')});
+        await interaction.editReply({ content: statusLines.join('\n') });
     } catch (error) {
         console.error('Verify command error:', error);
-        await interaction.editReply({content: 'An error occurred during verification.'});
+        await interaction.editReply({ content: 'An error occurred during verification.' });
     }
 }
