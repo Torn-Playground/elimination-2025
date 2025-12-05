@@ -19,7 +19,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
         if (!result.verified) {
             await interaction.editReply({
-                content: 'Could not find a Torn account linked to your Discord ID. Please ensure you have verified with a Torn bot that supports Discord linking, or check your Torn settings.'
+                content: 'Could not find a Torn account linked to your Discord ID. Please verify your Torn account here: [Verify with Torn](https://discordapp.com/api/oauth2/authorize?client_id=441210177971159041&redirect_uri=https%3A%2F%2Fwww.torn.com%2Fdiscord.php&response_type=code&scope=identify) then try again.'
             });
             return;
         }

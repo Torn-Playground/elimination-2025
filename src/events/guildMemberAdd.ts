@@ -1,5 +1,5 @@
-import {Events, GuildMember, TextChannel} from 'discord.js';
-import {verify} from "../services/verification";
+import { Events, GuildMember, TextChannel } from 'discord.js';
+import { verify } from "../services/verification";
 
 export const name = Events.GuildMemberAdd;
 
@@ -23,8 +23,7 @@ export async function execute(member: GuildMember) {
     try {
         const result = await verify(member)
         if (!result.verified) {
-            console.log(`Verification failed for ${member.id}.`);
-            await notify(`Welcome <@${member.id}>! Could not automatically verify you. Please use \`/v\` to verify.`);
+            await notify(`Welcome <@${member.id}>! Could not automatically verify you. Please verify your Torn account here: [Verify with Torn](https://discordapp.com/api/oauth2/authorize?client_id=441210177971159041&redirect_uri=https%3A%2F%2Fwww.torn.com%2Fdiscord.php&response_type=code&scope=identify) then use \`/v\`.`);
             return;
         }
 
@@ -35,7 +34,6 @@ export async function execute(member: GuildMember) {
         if (!result.appliedTeamRole) statusLines.push('⚠ Could not apply team role.');
 
         await notify(statusLines.join("\n"));
-
     } catch (error) {
         console.error('Error in guildMemberAdd:', error);
     }
