@@ -5,6 +5,8 @@ import { formatSuccessMessage, verify } from "../services/verification";
 export const name = Events.GuildMemberAdd;
 
 export async function execute(member: GuildMember) {
+    if (member.user.bot) return;
+
     const channel = member.guild.channels.cache.find((c) => c.name === NOT_VERIFIED_CHANNEL_NAME);
 
     const notify = async (msg: string) => {
