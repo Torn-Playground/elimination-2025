@@ -1,9 +1,9 @@
-import {config} from '../config';
-import {TornApiClient} from "tornapi-typescript";
+import { TornApiClient } from "tornapi-typescript";
+import { config } from "../config";
 
 export interface TornUser {
-    id: number,
-    name: string,
+    id: number;
+    name: string;
     competition?: {
         team?: string;
     };
@@ -20,21 +20,24 @@ export async function getUserByDiscordId(discordId: string): Promise<TornUser | 
             id: discordId,
             selections: ["profile", "competition"],
             key: config.TORN_API_KEY,
-        })
+        });
         if ("error" in data) {
-            console.error('Torn API Error:', data.error);
+            console.error("Torn API Error:", data.error);
             return null;
         }
 
-        data.competition
+        data.competition;
 
         return {
             id: data.profile.id,
             name: data.profile.name,
-            competition: data.competition?.name === "Elimination" ? {team: data.competition.team} : undefined,
+            competition:
+                data.competition?.name === "Elimination"
+                    ? { team: data.competition.team }
+                    : undefined,
         };
     } catch (error) {
-        console.error('Failed to fetch Torn user:', error);
+        console.error("Failed to fetch Torn user:", error);
         return null;
     }
 }

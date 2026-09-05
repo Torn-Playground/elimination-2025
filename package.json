@@ -1,25 +1,30 @@
 {
-  "name": "elimination-2025",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "dev": "ts-node src/index.ts",
-    "build": "tsc"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "dependencies": {
-    "discord.js": "^14.27.0",
-    "dotenv": "^17.4.2",
-    "tornapi-typescript": "^6.13.1"
-  },
-  "devDependencies": {
-    "@types/express": "^5.0.6",
-    "@types/node": "^26.4.1",
-    "ts-node": "^10.9.2",
-    "typescript": "^7.0.2"
-  }
+    "name": "elimination-2025",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "scripts": {
+        "dev": "ts-node src/index.ts",
+        "build": "tsc",
+        "format": "biome format --write .",
+        "format:check": "biome format .",
+        "lint": "biome lint .",
+        "check": "biome check ."
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "type": "commonjs",
+    "dependencies": {
+        "discord.js": "^14.27.0",
+        "dotenv": "^17.4.2",
+        "tornapi-typescript": "^6.13.1"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "^2.5.12",
+        "@types/express": "^5.0.6",
+        "@types/node": "^26.4.1",
+        "ts-node": "^10.9.2",
+        "typescript": "^7.0.2"
+    }
 }
