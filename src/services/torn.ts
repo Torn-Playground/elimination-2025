@@ -22,7 +22,7 @@ export async function getUserByDiscordId(discordId: string): Promise<TornUser | 
             key: config.TORN_API_KEY,
         });
         if ("error" in data) {
-            console.error("Torn API Error:", data.error);
+            console.error(`Torn API Error for user '${discordId}':`, data.error);
             return null;
         }
 
