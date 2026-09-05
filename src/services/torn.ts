@@ -1,4 +1,4 @@
-import { TornApiClient } from "tornapi-typescript";
+import { TornApiClient, type UserCompetitionResponse } from "tornapi-typescript";
 import { config } from "../config";
 
 export interface TornUser {
@@ -26,13 +26,25 @@ export async function getUserByDiscordId(discordId: string): Promise<TornUser | 
             return null;
         }
 
+        let competition: UserCompetitionResponse["competition"] | undefined;
+        if ("name" in data && data.name === "Elimination" && "attacks" in data && "score" in data && "team" in data) {
+            competition = {
+                name: "Elimination",
+                score: data.score as number,
+                team: data.team as string,
+                attacks: data.attacks as number,
+            }
+        } else {
+            competition = data.competition;
+        }
+
         console.log("User Competition", data.profile.id, JSON.stringify(data.competition))
         return {
             id: data.profile.id,
             name: data.profile.name,
             competition:
-                data.competition?.name === "Elimination"
-                    ? { team: data.competition.team }
+                competition?.name === "Elimination"
+                    ? { team: competition.team }
                     : undefined,
         };
     } catch (error) {
