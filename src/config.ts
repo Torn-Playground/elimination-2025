@@ -26,5 +26,4 @@ export const VERIFIED_ROLE_NAME = "Verified";
 
 export const NOT_VERIFIED_CHANNEL_NAME = "not-verified";
 
-export const TORN_VERIFY_URL =
-    "https://discordapp.com/api/oauth2/authorize?client_id=441210177971159041&redirect_uri=https%3A%2F%2Fwww.torn.com%2Fdiscord.php&response_type=code&scope=identify";
+export const TORN_VERIFY_URL = "https://discord.com/channels/681922682949992581/909160345736728647/1533191612140753058";
