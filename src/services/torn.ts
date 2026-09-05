@@ -38,7 +38,7 @@ export async function getUserByDiscordId(discordId: string): Promise<TornUser | 
             competition = data.competition;
         }
 
-        console.log("User Competition", data.profile.id, JSON.stringify(data.competition))
+        console.log("User Competition", data.profile.id, JSON.stringify(competition))
         return {
             id: data.profile.id,
             name: data.profile.name,
