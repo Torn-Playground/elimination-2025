@@ -1,10 +1,15 @@
 import {
     type ChatInputCommandInteraction,
+    type Guild,
     type GuildMember,
     PermissionFlagsBits,
     SlashCommandBuilder,
 } from "discord.js";
-import { verify } from "../services/verification";
+import { VERIFIED_ROLE_NAME } from "../config";
+import { formatSuccessMessage, verify } from "../services/verification";
+
+// Stop before Discord kills the deferred interaction (15 min cap).
+const PROCESSING_BUDGET_MS = 14 * 60 * 1000;
 
 export const data = new SlashCommandBuilder()
     .setName("verify")
@@ -33,7 +38,8 @@ export const data = new SlashCommandBuilder()
     );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
-    if (!interaction.guild) {
+    const guild = interaction.guild;
+    if (!guild) {
         await interaction.reply({ content: "This command can only be used in a server." });
         return;
     }
@@ -41,28 +47,27 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     const subcommand = interaction.options.getSubcommand();
 
     if (subcommand === "member") {
-        await handleVerifyMember(interaction);
+        await handleVerifyMember(interaction, guild);
     } else if (subcommand === "all") {
-        await handleVerifyAll(interaction);
+        await handleVerifyAll(interaction, guild);
     } else {
         await interaction.reply({ content: "Unknown subcommand." });
     }
 }
 
-async function handleVerifyMember(interaction: ChatInputCommandInteraction) {
+async function handleVerifyMember(interaction: ChatInputCommandInteraction, guild: Guild) {
     await interaction.deferReply();
 
     const targetUser = interaction.options.getUser("target", true);
     let targetMember: GuildMember;
 
     try {
-        targetMember = await interaction.guild!.members.fetch(targetUser.id);
-    } catch (error) {
+        targetMember = await guild.members.fetch(targetUser.id);
+    } catch {
         await interaction.editReply({ content: "Could not find that member in this server." });
         return;
     }
 
-    // Reuse the verification service
     try {
         const result = await verify(targetMember);
 
@@ -73,38 +78,31 @@ async function handleVerifyMember(interaction: ChatInputCommandInteraction) {
             return;
         }
 
-        const statusLines = [`Verified <@${targetUser.id}> as **${result.nickname}**.`];
-
-        if (!result.renamed) statusLines.push("⚠ Could not update nickname (check permissions).");
-        if (!result.appliedVerifiedRole) statusLines.push("⚠ Could not add verified role.");
-        if (!result.appliedTeamRole) statusLines.push("⚠ Could not apply team role.");
-
-        await interaction.editReply({ content: statusLines.join("\n") });
+        await interaction.editReply({ content: formatSuccessMessage(targetUser.id, result) });
     } catch (error) {
         console.error("Verify member error:", error);
         await interaction.editReply({ content: "An error occurred during verification." });
     }
 }
 
-async function handleVerifyAll(interaction: ChatInputCommandInteraction) {
+async function handleVerifyAll(interaction: ChatInputCommandInteraction, guild: Guild) {
     await interaction.deferReply();
 
     // 1. Fetch all members (ensure cache is full)
-    await interaction.guild!.members.fetch();
+    await guild.members.fetch();
 
     const force = interaction.options.getBoolean("force") ?? false;
 
     // 2. Filter unverified (or all if force is true)
-    // We assume "Verified" role name. Ideally from config or finding it first.
-    const verifiedRole = interaction.guild!.roles.cache.find((r) => r.name === "Verified");
+    const verifiedRole = guild.roles.cache.find((r) => r.name === VERIFIED_ROLE_NAME);
     if (!verifiedRole) {
         await interaction.editReply({
-            content: 'Could not find a role named "Verified". Please create it first.',
+            content: `Could not find a role named "${VERIFIED_ROLE_NAME}". Please create it first.`,
         });
         return;
     }
 
-    const membersToVerify = interaction.guild!.members.cache.filter((m) => {
+    const membersToVerify = guild.members.cache.filter((m) => {
         if (m.user.bot) return false;
         if (force) return true; // Verify everyone if forced
         return !m.roles.cache.has(verifiedRole.id); // Otherwise only unverified
@@ -122,13 +120,30 @@ async function handleVerifyAll(interaction: ChatInputCommandInteraction) {
     let successCount = 0;
     let failCount = 0;
     let processedCount = 0;
+    const startedAt = Date.now();
+    let stoppedEarly = false;
+
+    // Report progress; if the interaction died (edit fails), signal caller to bail.
+    const reportProgress = async (content: string): Promise<boolean> => {
+        try {
+            await interaction.editReply({ content });
+            return true;
+        } catch (error) {
+            console.error("Bulk verification interrupted (interaction expired?):", error);
+            return false;
+        }
+    };
 
     // 3. Process with rate limiting
     // Torn API limit is often 100/min. Let's aim safely for 1 request every 1.5 seconds (~40/min) to be safe with other bot usage.
     // Or closer to limit: 1 request every 0.7 seconds (~85/min).
     // Let's go with 1s delay.
+    for (const [, member] of membersToVerify) {
+        if (Date.now() - startedAt > PROCESSING_BUDGET_MS) {
+            stoppedEarly = true;
+            break;
+        }
 
-    for (const [_, member] of membersToVerify) {
         try {
             const result = await verify(member);
             if (result.verified) {
@@ -136,7 +151,7 @@ async function handleVerifyAll(interaction: ChatInputCommandInteraction) {
             } else {
                 failCount++;
             }
-        } catch (e) {
+        } catch {
             failCount++;
         }
 
@@ -144,16 +159,31 @@ async function handleVerifyAll(interaction: ChatInputCommandInteraction) {
 
         // Update progress every 10 members or last one
         if (processedCount % 10 === 0 || processedCount === membersToVerify.size) {
-            await interaction.editReply({
-                content: `Processing: ${processedCount}/${membersToVerify.size}\nVerified: ${successCount}\nFailed/Unlinked: ${failCount}`,
-            });
+            if (
+                !(await reportProgress(
+                    `Processing: ${processedCount}/${membersToVerify.size}\nVerified: ${successCount}\nFailed/Unlinked: ${failCount}`,
+                ))
+            ) {
+                break;
+            }
         }
 
         // Wait 1 second
         await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
-    await interaction.followUp({
-        content: `**Verification Complete**\nTotal Processed: ${processedCount}\nSuccessfully Verified: ${successCount}\nFailed/Unlinked: ${failCount}`,
-    });
+    const summaryLines = [
+        stoppedEarly
+            ? `**Verification Interrupted** - hit the 14-minute processing limit with ${membersToVerify.size - processedCount} members left. Run this command again to continue.`
+            : "**Verification Complete**",
+        `Total Processed: ${processedCount}`,
+        `Successfully Verified: ${successCount}`,
+        `Failed/Unlinked: ${failCount}`,
+    ];
+
+    try {
+        await interaction.followUp({ content: summaryLines.join("\n") });
+    } catch (error) {
+        console.error("Failed to send verification summary:", error);
+    }
 }

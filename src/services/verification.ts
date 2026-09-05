@@ -1,17 +1,25 @@
 import type { GuildMember } from "discord.js";
-import { ROLE_MAP } from "../config";
+import { ROLE_MAP, VERIFIED_ROLE_NAME } from "../config";
 import { getUserByDiscordId } from "./torn";
 
-type VerificationResult =
-    | { verified: false }
-    | {
-          verified: true;
-          nickname: string;
-          renamed: boolean;
-          appliedVerifiedRole: boolean;
-          inCompetition: boolean;
-          appliedTeamRole: boolean;
-      };
+export type VerificationSuccess = {
+    verified: true;
+    nickname: string;
+    renamed: boolean;
+    appliedVerifiedRole: boolean;
+    inCompetition: boolean;
+    appliedTeamRole: boolean;
+};
+
+type VerificationResult = { verified: false } | VerificationSuccess;
+
+export function formatSuccessMessage(memberId: string, result: VerificationSuccess): string {
+    const lines = [`Verified <@${memberId}> as **${result.nickname}**.`];
+    if (!result.renamed) lines.push("⚠ Could not update nickname (check permissions).");
+    if (!result.appliedVerifiedRole) lines.push("⚠ Could not add verified role.");
+    if (!result.appliedTeamRole) lines.push("⚠ Could not apply team role.");
+    return lines.join("\n");
+}
 
 export async function verify(member: GuildMember): Promise<VerificationResult> {
     const tornUser = await getUserByDiscordId(member.id);
@@ -29,7 +37,7 @@ export async function verify(member: GuildMember): Promise<VerificationResult> {
     }
 
     let appliedVerifiedRole = false;
-    const verifiedRole = member.guild.roles.cache.find((r) => r.name === "Verified");
+    const verifiedRole = member.guild.roles.cache.find((r) => r.name === VERIFIED_ROLE_NAME);
     if (verifiedRole) {
         try {
             await member.roles.add(verifiedRole);
