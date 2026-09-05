@@ -10,7 +10,7 @@ export interface TornUser {
 }
 
 const API_CLIENT = new TornApiClient({
-    defaultComment: "elims-2025",
+    defaultComment: "elims-2026",
 });
 
 export async function getUserByDiscordId(discordId: string): Promise<TornUser | null> {
