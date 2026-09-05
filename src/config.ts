@@ -19,6 +19,7 @@ export const config = {
 
 export const ROLE_MAP: Record<string, string> = {
     "Touching Grass": "1545780789843595304",
+    "Touching grass": "1545780789843595304",
 };
 
 export const VERIFIED_ROLE_NAME = "Verified";
