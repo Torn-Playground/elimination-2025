@@ -38,7 +38,7 @@ async function tick(): Promise<void> {
     try {
         const standings = await getEliminationStandings();
         if (standings === null) {
-            reportFailure("no API keys stored; skipping");
+            reportFailure("no API keys stored or no standings available yet; skipping");
             return;
         }
         if (lastFailure) {
