@@ -1,5 +1,6 @@
-import type { GuildMember } from "discord.js";
-import { ROLE_MAP, VERIFIED_ROLE_NAME } from "../config";
+import type { GuildMember, Role } from "discord.js";
+import { getGuildSettings } from "./guild-settings";
+import { findTeamRole } from "./team-roles";
 import { getUserByDiscordId } from "./torn";
 
 export type VerificationSuccess = {
@@ -11,13 +12,28 @@ export type VerificationSuccess = {
     appliedTeamRole: boolean;
 };
 
-type VerificationResult = { verified: false } | VerificationSuccess;
+export type VerificationResult = { verified: false } | VerificationSuccess;
+
+async function resolveRole(member: GuildMember, roleId: string | null): Promise<Role | null> {
+    if (!roleId) {
+        return null;
+    }
+    try {
+        return await member.guild.roles.fetch(roleId);
+    } catch {
+        return null;
+    }
+}
 
 export function formatSuccessMessage(memberId: string, result: VerificationSuccess): string {
     const lines = [`Verified <@${memberId}> as **${result.nickname}**.`];
     if (!result.renamed) lines.push("⚠ Could not update nickname (check permissions).");
-    if (!result.appliedVerifiedRole) lines.push("⚠ Could not add verified role.");
-    if (!result.appliedTeamRole) lines.push("⚠ Could not apply team role.");
+    if (!result.appliedVerifiedRole)
+        lines.push(
+            "⚠ Could not add the verified role (is it configured and does the bot have Manage Roles?).",
+        );
+    if (!result.appliedTeamRole)
+        lines.push("⚠ Could not apply the team role (is the team mapped?).");
     return lines.join("\n");
 }
 
@@ -27,7 +43,9 @@ export async function verify(member: GuildMember): Promise<VerificationResult> {
         return { verified: false };
     }
 
-    let renamed: boolean = false;
+    const settings = getGuildSettings(member.guild.id);
+
+    let renamed = false;
     const nickname = `${tornUser.name} [${tornUser.id}]`;
     try {
         await member.setNickname(nickname);
@@ -37,7 +55,7 @@ export async function verify(member: GuildMember): Promise<VerificationResult> {
     }
 
     let appliedVerifiedRole = false;
-    const verifiedRole = member.guild.roles.cache.find((r) => r.name === VERIFIED_ROLE_NAME);
+    const verifiedRole = await resolveRole(member, settings.verifiedRoleId);
     if (verifiedRole) {
         try {
             await member.roles.add(verifiedRole);
@@ -45,30 +63,19 @@ export async function verify(member: GuildMember): Promise<VerificationResult> {
         } catch (error) {
             console.warn("Failed to apply verified role:", error);
         }
-    } else {
-        console.warn("Verified role not found in guild.");
     }
 
-    let inCompetition = false;
     let appliedTeamRole = false;
-    if (tornUser.competition) {
-        inCompetition = true;
-
-        const teamName = tornUser.competition.team;
-        if (teamName) {
-            const teamRole =
-                teamName in ROLE_MAP
-                    ? member.guild.roles.cache.get(ROLE_MAP[teamName])
-                    : member.guild.roles.cache.find((r) => r.name === teamName);
-            if (teamRole) {
-                try {
-                    await member.roles.add(teamRole);
-                    appliedTeamRole = true;
-                } catch (error) {
-                    console.warn(`Failed to apply team role for "${teamName}":`, error);
-                }
-            } else {
-                console.warn(`Role for team "${teamName}" not found.`);
+    const teamName = tornUser.competition?.team;
+    if (teamName) {
+        const teamRoleId = findTeamRole(member.guild.id, teamName)?.roleId ?? null;
+        const teamRole = await resolveRole(member, teamRoleId);
+        if (teamRole) {
+            try {
+                await member.roles.add(teamRole);
+                appliedTeamRole = true;
+            } catch (error) {
+                console.warn(`Failed to apply team role for "${teamName}":`, error);
             }
         }
     }
@@ -78,7 +85,7 @@ export async function verify(member: GuildMember): Promise<VerificationResult> {
         nickname,
         renamed,
         appliedVerifiedRole,
-        inCompetition,
+        inCompetition: Boolean(teamName),
         appliedTeamRole,
     };
 }

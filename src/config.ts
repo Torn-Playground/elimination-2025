@@ -1,30 +1,17 @@
-import dotenv from "dotenv";
+import "dotenv/config";
+import path from "node:path";
 
-dotenv.config();
-
-function validateEnv(key: string): string {
+function requiredEnv(key: string): string {
     const value = process.env[key];
-    if (!value) {
-        throw new Error(`Missing environment variable: ${key}`);
-    }
+    if (!value) throw new Error(`Missing environment variable: ${key}`);
+
     return value;
 }
 
-export const config = {
-    DISCORD_TOKEN: validateEnv("DISCORD_TOKEN"),
-    CLIENT_ID: validateEnv("CLIENT_ID"),
-    GUILD_ID: validateEnv("GUILD_ID"),
-    TORN_API_KEY: validateEnv("TORN_API_KEY"),
-};
+export const DISCORD_TOKEN = requiredEnv("DISCORD_TOKEN");
 
-export const ROLE_MAP: Record<string, string> = {
-    "Touching Grass": "1545780789843595304",
-    "Touching grass": "1545780789843595304",
-};
-
-export const VERIFIED_ROLE_NAME = "Verified";
-
-export const NOT_VERIFIED_CHANNEL_NAME = "not-verified";
+export const DATABASE_PATH =
+    process.env.DATABASE_PATH ?? path.resolve(process.cwd(), "data", "elimination.db");
 
 export const TORN_VERIFY_URL =
     "https://discord.com/api/oauth2/authorize?client_id=439014098987122698&redirect_uri=https%3A%2F%2Fwww.torn.com%2Fdiscord.php&response_type=code&scope=identify";

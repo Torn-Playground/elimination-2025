@@ -121,3 +121,6 @@ dist
 .idea
 
 wip/
+
+# Runtime database
+data/
