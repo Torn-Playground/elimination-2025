@@ -17,6 +17,26 @@ export const teamRoles = sqliteTable(
     (table) => [primaryKey({ columns: [table.guildId, table.name] })],
 );
 
+export const eliminationTeamSnapshots = sqliteTable(
+    "elimination_team_snapshots",
+    {
+        teamId: integer("team_id").notNull(),
+        name: text("name").notNull(),
+        participants: integer("participants").notNull(),
+        position: integer("position").notNull(),
+        score: integer("score").notNull(),
+        lives: integer("lives").notNull(),
+        wins: integer("wins").notNull(),
+        losses: integer("losses").notNull(),
+        eliminated: integer("eliminated", { mode: "boolean" }).notNull(),
+        eliminatedTimestamp: integer("eliminated_timestamp"),
+        observedAt: integer("observed_at", { mode: "timestamp_ms" })
+            .notNull()
+            .$defaultFn(() => new Date()),
+    },
+    (table) => [primaryKey({ columns: [table.teamId, table.observedAt] })],
+);
+
 export const apiKeys = sqliteTable("api_keys", {
     id: integer("id").primaryKey({ autoIncrement: true }),
     key: text("key").notNull().unique(),

@@ -8,6 +8,13 @@
             "when": 1788703713832,
             "tag": "0000_init",
             "breakpoints": true
+        },
+        {
+            "idx": 1,
+            "version": "6",
+            "when": 1788729383010,
+            "tag": "0001_mysterious_lightspeed",
+            "breakpoints": true
         }
     ]
 }

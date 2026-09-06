@@ -3,8 +3,10 @@ import { SapphireClient } from "@sapphire/framework";
 import { GatewayIntentBits } from "discord.js";
 import { DISCORD_TOKEN } from "./config";
 import { runMigrations } from "./lib/db";
+import { startActivityTracking } from "./lib/services/activity";
 
 runMigrations();
+startActivityTracking();
 
 const client = new SapphireClient({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],

@@ -119,3 +119,55 @@ function describeKeyError(code: number | undefined): string {
             return `Torn rejected the key (${code ?? "unknown error"}).`;
     }
 }
+
+export type EliminationTeamStanding = {
+    id: number;
+    name: string;
+    participants: number;
+    position: number;
+    score: number;
+    lives: number;
+    wins: number;
+    losses: number;
+    eliminated: boolean;
+    eliminatedTimestamp: number | null;
+};
+
+export async function getEliminationStandings(): Promise<EliminationTeamStanding[] | null> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const apiKey = nextApiKey();
+        if (!apiKey) return null;
+
+        const data = await API_CLIENT.getV2({
+            section: "torn",
+            selections: ["elimination"],
+            key: apiKey.key,
+        });
+
+        if ("error" in data) {
+            if (data.error.code === TornApiError.CLOSED_TEMPORARILY) {
+                return null;
+            }
+            if (RETRYABLE_ERROR_CODES.has(data.error.code)) {
+                continue;
+            }
+            throw new Error(
+                `Torn rejected the eliminations request (code ${data.error.code}): ${data.error.error}`,
+            );
+        }
+
+        return data.elimination.map((team) => ({
+            id: team.id,
+            name: team.name,
+            participants: team.participants,
+            position: team.position,
+            score: team.score,
+            lives: team.lives,
+            wins: team.wins,
+            losses: team.losses,
+            eliminated: team.eliminated,
+            eliminatedTimestamp: team.eliminated_timestamp,
+        }));
+    }
+    throw new Error("Torn eliminations request failed after retries.");
+}
