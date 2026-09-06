@@ -1,4 +1,4 @@
-import { integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { blob, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const guildSettings = sqliteTable("guild_settings", {
     guildId: text("guild_id").primaryKey(),
@@ -35,6 +35,20 @@ export const eliminationTeamSnapshots = sqliteTable(
             .$defaultFn(() => new Date()),
     },
     (table) => [primaryKey({ columns: [table.teamId, table.observedAt] })],
+);
+
+export const activityChartCache = sqliteTable(
+    "activity_chart_cache",
+    {
+        teamId: integer("team_id").notNull(),
+        stat: text("stat").notNull(),
+        lastObservedAt: integer("last_observed_at", { mode: "timestamp_ms" }).notNull(),
+        png: blob("png").notNull(),
+        generatedAt: integer("generated_at", { mode: "timestamp_ms" })
+            .notNull()
+            .$defaultFn(() => new Date()),
+    },
+    (table) => [primaryKey({ columns: [table.teamId, table.stat] })],
 );
 
 export const apiKeys = sqliteTable("api_keys", {

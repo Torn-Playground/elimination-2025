@@ -15,6 +15,13 @@
             "when": 1788729383010,
             "tag": "0001_mysterious_lightspeed",
             "breakpoints": true
+        },
+        {
+            "idx": 2,
+            "version": "6",
+            "when": 1788731603279,
+            "tag": "0002_flashy_major_mapleleaf",
+            "breakpoints": true
         }
     ]
 }
