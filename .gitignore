@@ -120,8 +120,4 @@ dist
 
 .idea
 
-# WXT
-.output
-.wxt
-web-ext.config.ts
-.env.submit*
+wip/
