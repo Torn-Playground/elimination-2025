@@ -54,7 +54,7 @@ export class ActivityCommand extends Command {
                             { name: STAT_DISPLAY.score, value: "score" },
                             { name: STAT_DISPLAY.wins, value: "wins" },
                             { name: STAT_DISPLAY.losses, value: "losses" },
-                            { name: STAT_DISPLAY.losses, value: "losses" },
+                            { name: STAT_DISPLAY.participants, value: "participants" },
                         ),
                 ),
         );
