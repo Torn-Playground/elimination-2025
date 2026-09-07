@@ -343,7 +343,7 @@ async function renderActivityChart(options: {
 
     const xPositions = xTickPositions(options.from, options.to);
     const labelEvery = Math.max(1, Math.ceil(xPositions.length / 6));
-    for (let i = 0; i < xPositions.length; i += labelEvery) {
+    for (let i = 0; i < Math.max(1, xPositions.length - 1); i += labelEvery) {
         const x = xPositions[i];
         const t = span <= 0 ? options.from : options.from + span * (i / (xPositions.length - 1));
         drawLabel(
