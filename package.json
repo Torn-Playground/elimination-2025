@@ -4,9 +4,9 @@
     "description": "",
     "main": "src/index.ts",
     "scripts": {
-        "dev": "ts-node src/index.ts",
+        "dev": "bun --watch src/index.ts",
         "build": "tsc",
-        "start": "node dist/index.js",
+        "start": "bun src/index.ts",
         "db:generate": "drizzle-kit generate",
         "format": "biome format --write .",
         "format:check": "biome format .",
@@ -21,7 +21,6 @@
     "dependencies": {
         "@sapphire/framework": "^5.5.1",
         "@sapphire/plugin-subcommands": "^7.0.1",
-        "better-sqlite3": "13.0.3",
         "croner": "^10.0.1",
         "dejavu-fonts-ttf": "^2.37.3",
         "discord.js": "^14.27.0",
@@ -32,11 +31,8 @@
     },
     "devDependencies": {
         "@biomejs/biome": "^2.5.12",
-        "@types/better-sqlite3": "^9.6.0",
-        "@types/express": "^5.0.6",
-        "@types/node": "^26.4.1",
+        "@types/bun": "^1.4.1",
         "drizzle-kit": "^0.31.10",
-        "ts-node": "^10.9.2",
         "typescript": "^6.0.3"
     }
 }

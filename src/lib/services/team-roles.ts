@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { db } from "../db";
+import { db, runResult } from "../db";
 import { teamRoles as table } from "../db/schema";
 
 export type TeamRole = {
@@ -13,16 +13,21 @@ export function listTeamRoles(guildId: string): TeamRole[] {
 }
 
 export function addTeamRole(guildId: string, name: string, roleId: string): boolean {
-    const result = db.insert(table).values({ guildId, name, roleId }).onConflictDoNothing().run();
+    const result = runResult(
+        db.insert(table).values({ guildId, name, roleId }).onConflictDoNothing().run(),
+    );
     return result.changes > 0;
 }
 
 export function removeTeamRole(guildId: string, name: string): boolean {
-    const result = db
-        .delete(table)
-        .where(and(eq(table.guildId, guildId), eq(table.name, name)))
-        .run();
-    return result.changes > 0;
+    return (
+        runResult(
+            db
+                .delete(table)
+                .where(and(eq(table.guildId, guildId), eq(table.name, name)))
+                .run(),
+        ).changes > 0
+    );
 }
 
 // Exact match first, then case-insensitive (team names from Torn can drift in casing).

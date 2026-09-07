@@ -1,5 +1,5 @@
 import { asc, eq, sql } from "drizzle-orm";
-import { db } from "../db";
+import { db, runResult } from "../db";
 import { apiKeys as table } from "../db/schema";
 
 export type ApiKey = {
@@ -35,7 +35,7 @@ export function addApiKey(apiKey: NewApiKey): ApiKey {
 }
 
 export function removeApiKey(id: number): boolean {
-    return db.delete(table).where(eq(table.id, id)).run().changes > 0;
+    return runResult(db.delete(table).where(eq(table.id, id)).run()).changes > 0;
 }
 
 export function nextApiKey(): ApiKey | null {
