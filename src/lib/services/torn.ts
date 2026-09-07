@@ -55,7 +55,7 @@ function toTornUser(data: TornV2UserData): TornUser | null {
 
 export async function getUserByDiscordId(discordId: string): Promise<TornUser | null> {
     for (let attempt = 0; attempt < 3; attempt++) {
-        const apiKey = nextApiKey();
+        const apiKey = await nextApiKey();
         if (!apiKey) {
             return null;
         }
@@ -135,7 +135,7 @@ export type EliminationTeamStanding = {
 
 export async function getEliminationStandings(): Promise<EliminationTeamStanding[] | null> {
     for (let attempt = 0; attempt < 3; attempt++) {
-        const apiKey = nextApiKey();
+        const apiKey = await nextApiKey();
         if (!apiKey) return null;
 
         const data = await API_CLIENT.getV2({

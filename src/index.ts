@@ -5,16 +5,20 @@ import { DISCORD_TOKEN } from "./config";
 import { runMigrations } from "./lib/db";
 import { startActivityTracking } from "./lib/services/activity";
 
-runMigrations();
-startActivityTracking();
+async function main(): Promise<void> {
+    await runMigrations();
+    startActivityTracking();
 
-const client = new SapphireClient({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
-    baseUserDirectory: __dirname,
-    loadMessageCommandListeners: false,
-});
+    const client = new SapphireClient({
+        intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
+        baseUserDirectory: __dirname,
+        loadMessageCommandListeners: false,
+    });
 
-void client.login(DISCORD_TOKEN).catch((error) => {
-    console.error("Failed to log in:", error);
+    await client.login(DISCORD_TOKEN);
+}
+
+main().catch((error) => {
+    console.error("Failed to start:", error);
     process.exit(1);
 });

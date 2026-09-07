@@ -74,16 +74,15 @@ export function formatNumber(value: number): string {
     return value.toLocaleString("en-US");
 }
 
-export function listTrackedTeams(): string[] {
-    const rows = db
+export async function listTrackedTeams(): Promise<string[]> {
+    const rows = await db
         .select({
             name: snapshots.name,
             last: sql<number>`max(${snapshots.observedAt})`,
         })
         .from(snapshots)
         .groupBy(sql`lower(${snapshots.name})`)
-        .orderBy(desc(sql`max(${snapshots.observedAt})`))
-        .all();
+        .orderBy(desc(sql`max(${snapshots.observedAt})`));
     return rows.map((row) => row.name);
 }
 
@@ -104,33 +103,31 @@ export async function getActivityChart(
     teamName: string,
     stat: ActivityStat,
 ): Promise<ActivityChartResult | null> {
-    const resolved = db
+    const [resolved] = await db
         .select({ teamId: snapshots.teamId, name: snapshots.name })
         .from(snapshots)
         .where(sql`lower(${snapshots.name}) = ${teamName.toLowerCase()}`)
         .orderBy(desc(snapshots.observedAt))
-        .limit(1)
-        .get();
+        .limit(1);
     if (!resolved) return null;
 
     const column = sql<number>`${statColumn(stat)}`;
-    const rows = db
+    const rows = await db
         .select({ t: snapshots.observedAt, v: column })
         .from(snapshots)
         .where(eq(snapshots.teamId, resolved.teamId))
-        .orderBy(asc(snapshots.observedAt))
-        .all();
+        .orderBy(asc(snapshots.observedAt));
     if (rows.length === 0) return null;
 
     const first = rows[0];
     const last = rows[rows.length - 1];
     const to = last.t.getTime();
 
-    const cached = db
+    const [cached] = await db
         .select()
         .from(cacheTable)
         .where(and(eq(cacheTable.teamId, resolved.teamId), eq(cacheTable.stat, stat)))
-        .get();
+        .limit(1);
     if (cached && cached.lastObservedAt.getTime() === to) {
         return {
             png: Buffer.from(cached.png as Uint8Array),
@@ -164,13 +161,12 @@ export async function getActivityChart(
     });
 
     const lastObservedAt = new Date(to);
-    db.insert(cacheTable)
+    await db
+        .insert(cacheTable)
         .values({ teamId: resolved.teamId, stat, lastObservedAt, png })
-        .onConflictDoUpdate({
-            target: [cacheTable.teamId, cacheTable.stat],
+        .onDuplicateKeyUpdate({
             set: { lastObservedAt, png },
-        })
-        .run();
+        });
 
     return {
         png,

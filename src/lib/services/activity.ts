@@ -45,7 +45,7 @@ async function tick(): Promise<void> {
             console.info(`${LOG_PREFIX} resumed.`);
             lastFailure = null;
         }
-        recordChanges(standings);
+        await recordChanges(standings);
     } catch (error) {
         reportFailure(error instanceof Error ? error.message : String(error));
     } finally {
@@ -63,20 +63,20 @@ function reportError(error: unknown): void {
     reportFailure(error instanceof Error ? error.message : String(error));
 }
 
-function recordChanges(standings: EliminationTeamStanding[]): void {
+async function recordChanges(standings: EliminationTeamStanding[]): Promise<void> {
     let changed = 0;
     const now = new Date();
     for (const team of standings) {
-        const prev = db
+        const [prev] = await db
             .select()
             .from(snapshots)
             .where(eq(snapshots.teamId, team.id))
             .orderBy(desc(snapshots.observedAt))
-            .limit(1)
-            .get();
+            .limit(1);
         if (prev && sameStanding(prev, team)) continue;
 
-        db.insert(snapshots)
+        await db
+            .insert(snapshots)
             .values({
                 teamId: team.id,
                 name: team.name,
@@ -90,7 +90,7 @@ function recordChanges(standings: EliminationTeamStanding[]): void {
                 eliminatedTimestamp: team.eliminatedTimestamp,
                 observedAt: now,
             })
-            .run();
+            .execute();
         changed++;
     }
     if (changed > 0) {

@@ -3,7 +3,7 @@ import type { Guild } from "discord.js";
 import { getGuildSettings } from "../services/guild-settings";
 
 export async function sendStaffLog(guild: Guild, message: string): Promise<void> {
-    const { managementChannelId } = getGuildSettings(guild.id);
+    const { managementChannelId } = await getGuildSettings(guild.id);
     const channel = managementChannelId
         ? await guild.channels.fetch(managementChannelId).catch(() => null)
         : null;

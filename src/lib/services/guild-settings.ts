@@ -14,36 +14,33 @@ const empty: GuildSettings = {
     managementChannelId: null,
 };
 
-export function getGuildSettings(guildId: string): GuildSettings {
-    const row = db.select().from(table).where(eq(table.guildId, guildId)).get();
+export async function getGuildSettings(guildId: string): Promise<GuildSettings> {
+    const [row] = await db.select().from(table).where(eq(table.guildId, guildId)).limit(1);
     return row ?? empty;
 }
 
-function saveGuildSettings(
+async function saveGuildSettings(
     guildId: string,
     fields: Partial<{
         verifiedRoleId: string;
         notVerifiedChannelId: string;
         managementChannelId: string;
     }>,
-): void {
-    db.insert(table)
+): Promise<void> {
+    await db
+        .insert(table)
         .values({ guildId, ...fields })
-        .onConflictDoUpdate({
-            target: table.guildId,
-            set: fields,
-        })
-        .run();
+        .onDuplicateKeyUpdate({ set: fields });
 }
 
-export function setVerifiedRole(guildId: string, roleId: string): void {
-    saveGuildSettings(guildId, { verifiedRoleId: roleId });
+export function setVerifiedRole(guildId: string, roleId: string): Promise<void> {
+    return saveGuildSettings(guildId, { verifiedRoleId: roleId });
 }
 
-export function setNotVerifiedChannel(guildId: string, channelId: string): void {
-    saveGuildSettings(guildId, { notVerifiedChannelId: channelId });
+export function setNotVerifiedChannel(guildId: string, channelId: string): Promise<void> {
+    return saveGuildSettings(guildId, { notVerifiedChannelId: channelId });
 }
 
-export function setManagementChannel(guildId: string, channelId: string): void {
-    saveGuildSettings(guildId, { managementChannelId: channelId });
+export function setManagementChannel(guildId: string, channelId: string): Promise<void> {
+    return saveGuildSettings(guildId, { managementChannelId: channelId });
 }

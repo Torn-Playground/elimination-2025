@@ -88,7 +88,7 @@ export class VerifyCommand extends Subcommand {
         const guild = interaction.guild;
         if (!guild) return;
 
-        const keyCount = countApiKeys();
+        const keyCount = await countApiKeys();
         if (keyCount === 0) {
             await interaction.editReply({
                 content: "No Torn API keys are configured yet.",
@@ -96,7 +96,7 @@ export class VerifyCommand extends Subcommand {
             return;
         }
 
-        const verifiedRoleId = getGuildSettings(guild.id).verifiedRoleId;
+        const verifiedRoleId = (await getGuildSettings(guild.id)).verifiedRoleId;
         if (!verifiedRoleId) {
             await interaction.editReply({
                 content: "No verified role is configured.",

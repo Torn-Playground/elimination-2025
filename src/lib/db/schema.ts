@@ -1,63 +1,79 @@
-import { blob, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import {
+    bigint,
+    boolean,
+    customType,
+    datetime,
+    int,
+    mysqlTable,
+    primaryKey,
+    varchar,
+} from "drizzle-orm/mysql-core";
 
-export const guildSettings = sqliteTable("guild_settings", {
-    guildId: text("guild_id").primaryKey(),
-    verifiedRoleId: text("verified_role_id"),
-    notVerifiedChannelId: text("not_verified_channel_id"),
-    managementChannelId: text("management_channel_id"),
+const longblob = customType<{ data: Buffer; driverData: Buffer }>({
+    dataType() {
+        return "longblob";
+    },
 });
 
-export const teamRoles = sqliteTable(
+const DISCORD_ID_LEN = 64;
+const NAME_LEN = 255;
+
+export const guildSettings = mysqlTable("guild_settings", {
+    guildId: varchar("guild_id", { length: DISCORD_ID_LEN }).primaryKey(),
+    verifiedRoleId: varchar("verified_role_id", { length: DISCORD_ID_LEN }),
+    notVerifiedChannelId: varchar("not_verified_channel_id", { length: DISCORD_ID_LEN }),
+    managementChannelId: varchar("management_channel_id", { length: DISCORD_ID_LEN }),
+});
+
+export const teamRoles = mysqlTable(
     "team_roles",
     {
-        guildId: text("guild_id").notNull(),
-        name: text("name").notNull(),
-        roleId: text("role_id").notNull(),
+        guildId: varchar("guild_id", { length: DISCORD_ID_LEN }).notNull(),
+        name: varchar("name", { length: NAME_LEN }).notNull(),
+        roleId: varchar("role_id", { length: DISCORD_ID_LEN }).notNull(),
     },
     (table) => [primaryKey({ columns: [table.guildId, table.name] })],
 );
 
-export const eliminationTeamSnapshots = sqliteTable(
+export const eliminationTeamSnapshots = mysqlTable(
     "elimination_team_snapshots",
     {
-        teamId: integer("team_id").notNull(),
-        name: text("name").notNull(),
-        participants: integer("participants").notNull(),
-        position: integer("position").notNull(),
-        score: integer("score").notNull(),
-        lives: integer("lives").notNull(),
-        wins: integer("wins").notNull(),
-        losses: integer("losses").notNull(),
-        eliminated: integer("eliminated", { mode: "boolean" }).notNull(),
-        eliminatedTimestamp: integer("eliminated_timestamp"),
-        observedAt: integer("observed_at", { mode: "timestamp_ms" })
-            .notNull()
-            .$defaultFn(() => new Date()),
+        teamId: int("team_id").notNull(),
+        name: varchar("name", { length: NAME_LEN }).notNull(),
+        participants: int("participants").notNull(),
+        position: int("position").notNull(),
+        score: int("score").notNull(),
+        lives: int("lives").notNull(),
+        wins: int("wins").notNull(),
+        losses: int("losses").notNull(),
+        eliminated: boolean("eliminated").notNull(),
+        eliminatedTimestamp: bigint("eliminated_timestamp", { mode: "number" }),
+        observedAt: datetime("observed_at", { mode: "date", fsp: 3 }).notNull(),
     },
     (table) => [primaryKey({ columns: [table.teamId, table.observedAt] })],
 );
 
-export const activityChartCache = sqliteTable(
+export const activityChartCache = mysqlTable(
     "activity_chart_cache",
     {
-        teamId: integer("team_id").notNull(),
-        stat: text("stat").notNull(),
-        lastObservedAt: integer("last_observed_at", { mode: "timestamp_ms" }).notNull(),
-        png: blob("png").notNull(),
-        generatedAt: integer("generated_at", { mode: "timestamp_ms" })
+        teamId: int("team_id").notNull(),
+        stat: varchar("stat", { length: 32 }).notNull(),
+        lastObservedAt: datetime("last_observed_at", { mode: "date", fsp: 3 }).notNull(),
+        png: longblob("png").notNull(),
+        generatedAt: datetime("generated_at", { mode: "date", fsp: 3 })
             .notNull()
             .$defaultFn(() => new Date()),
     },
     (table) => [primaryKey({ columns: [table.teamId, table.stat] })],
 );
 
-export const apiKeys = sqliteTable("api_keys", {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    key: text("key").notNull().unique(),
-    playerId: integer("player_id").notNull(),
-    playerName: text("player_name").notNull(),
-    lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
-    createdAt: integer("created_at", { mode: "timestamp_ms" })
+export const apiKeys = mysqlTable("api_keys", {
+    id: int("id").autoincrement().primaryKey(),
+    key: varchar("key", { length: NAME_LEN }).notNull().unique(),
+    playerId: int("player_id").notNull(),
+    playerName: varchar("player_name", { length: NAME_LEN }).notNull(),
+    lastUsedAt: datetime("last_used_at", { mode: "date", fsp: 3 }),
+    createdAt: datetime("created_at", { mode: "date", fsp: 3 })
         .notNull()
         .$defaultFn(() => new Date()),
 });

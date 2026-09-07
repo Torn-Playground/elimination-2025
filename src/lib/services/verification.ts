@@ -43,7 +43,7 @@ export async function verify(member: GuildMember): Promise<VerificationResult> {
         return { verified: false };
     }
 
-    const settings = getGuildSettings(member.guild.id);
+    const settings = await getGuildSettings(member.guild.id);
 
     let renamed = false;
     const nickname = `${tornUser.name} [${tornUser.id}]`;
@@ -68,7 +68,7 @@ export async function verify(member: GuildMember): Promise<VerificationResult> {
     let appliedTeamRole = false;
     const teamName = tornUser.competition?.team;
     if (teamName) {
-        const teamRoleId = findTeamRole(member.guild.id, teamName)?.roleId ?? null;
+        const teamRoleId = (await findTeamRole(member.guild.id, teamName))?.roleId ?? null;
         const teamRole = await resolveRole(member, teamRoleId);
         if (teamRole) {
             try {

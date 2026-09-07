@@ -104,7 +104,7 @@ export class ActivityCommand extends Command {
             return;
         }
         const fragment = String(focused.value).toLowerCase();
-        const names = listTrackedTeams();
+        const names = await listTrackedTeams();
         const matches = fragment
             ? names.filter((name) => name.toLowerCase().includes(fragment))
             : names;

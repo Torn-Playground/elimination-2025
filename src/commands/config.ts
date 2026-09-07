@@ -209,7 +209,7 @@ export class ConfigCommand extends Subcommand {
 
     public async chatInputApiList(interaction: Subcommand.ChatInputCommandInteraction) {
         await this.defer(interaction);
-        const keys = listApiKeys();
+        const keys = await listApiKeys();
         if (keys.length === 0) {
             await interaction.editReply({
                 content: "No API keys configured yet. Add one with `/config api add`.",
@@ -239,13 +239,13 @@ export class ConfigCommand extends Subcommand {
             return;
         }
 
-        if (findApiKeyByKey(key)) {
+        if (await findApiKeyByKey(key)) {
             await interaction.editReply({ content: "That API key is already configured." });
             return;
         }
 
         const { owner } = verification;
-        const stored = addApiKey({ key, ...owner });
+        const stored = await addApiKey({ key, ...owner });
 
         await interaction.editReply({
             content: `Verified and added API key \`#${stored.id}\` for **${owner.playerName}** [${owner.playerId}].`,
@@ -255,7 +255,7 @@ export class ConfigCommand extends Subcommand {
     public async chatInputApiRemove(interaction: Subcommand.ChatInputCommandInteraction) {
         await this.defer(interaction);
         const id = interaction.options.getInteger("id", true);
-        if (!removeApiKey(id)) {
+        if (!(await removeApiKey(id))) {
             await interaction.editReply({ content: `No API key with id \`#${id}\`.` });
             return;
         }
@@ -270,7 +270,7 @@ export class ConfigCommand extends Subcommand {
 
     public async chatInputTeamRolesList(interaction: Subcommand.ChatInputCommandInteraction) {
         await this.defer(interaction);
-        const roles = listTeamRoles(this.requiredGuild(interaction).id);
+        const roles = await listTeamRoles(this.requiredGuild(interaction).id);
         if (roles.length === 0) {
             await interaction.editReply({ content: "No team roles mapped yet." });
             return;
@@ -289,7 +289,7 @@ export class ConfigCommand extends Subcommand {
             await interaction.editReply({ content: "The team name cannot be empty." });
             return;
         }
-        if (!addTeamRole(guildId, name, role.id)) {
+        if (!(await addTeamRole(guildId, name, role.id))) {
             await interaction.editReply({ content: `A role for **${name}** is already mapped.` });
             return;
         }
@@ -306,7 +306,7 @@ export class ConfigCommand extends Subcommand {
         await this.defer(interaction);
         const guildId = this.requiredGuild(interaction).id;
         const name = interaction.options.getString("name", true).trim();
-        if (!removeTeamRole(guildId, name)) {
+        if (!(await removeTeamRole(guildId, name))) {
             await interaction.editReply({ content: `No mapping for **${name}**.` });
             return;
         }
@@ -322,7 +322,7 @@ export class ConfigCommand extends Subcommand {
     public async chatInputRoleVerified(interaction: Subcommand.ChatInputCommandInteraction) {
         await this.defer(interaction);
         const role = interaction.options.getRole("role", true);
-        setVerifiedRole(this.requiredGuild(interaction).id, role.id);
+        await setVerifiedRole(this.requiredGuild(interaction).id, role.id);
         await interaction.editReply({ content: `Verified role set to <@&${role.id}>.` });
     }
 
@@ -335,7 +335,7 @@ export class ConfigCommand extends Subcommand {
             await interaction.editReply({ content: "That must be a text channel." });
             return;
         }
-        setNotVerifiedChannel(this.requiredGuild(interaction).id, channel.id);
+        await setNotVerifiedChannel(this.requiredGuild(interaction).id, channel.id);
         await interaction.editReply({ content: `Not-verified channel set to <#${channel.id}>.` });
     }
 
@@ -346,7 +346,7 @@ export class ConfigCommand extends Subcommand {
             await interaction.editReply({ content: "That must be a text channel." });
             return;
         }
-        setManagementChannel(this.requiredGuild(interaction).id, channel.id);
+        await setManagementChannel(this.requiredGuild(interaction).id, channel.id);
         await interaction.editReply({ content: `Management channel set to <#${channel.id}>.` });
     }
 
@@ -366,7 +366,7 @@ export class ConfigCommand extends Subcommand {
             await interaction.respond([]);
             return;
         }
-        const names = listTeamRoles(guildId).map((role) => role.name);
+        const names = (await listTeamRoles(guildId)).map((role) => role.name);
         const matches = focused.value
             ? names.filter((name) =>
                   name.toLowerCase().includes(String(focused.value).toLowerCase()),

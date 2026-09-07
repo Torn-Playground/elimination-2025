@@ -14,7 +14,7 @@ export class GuildMemberAdd extends Listener<typeof Events.GuildMemberAdd> {
         if (member.user.bot) return;
 
         const guildId = member.guild.id;
-        const channelId = getGuildSettings(guildId).notVerifiedChannelId;
+        const channelId = (await getGuildSettings(guildId)).notVerifiedChannelId;
         const channel = channelId
             ? await member.guild.channels.fetch(channelId).catch(() => null)
             : null;
