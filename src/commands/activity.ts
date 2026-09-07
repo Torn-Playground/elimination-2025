@@ -13,6 +13,7 @@ const STAT_DISPLAY: Record<ActivityStat, string> = {
     score: "Score",
     wins: "Wins",
     losses: "Losses",
+    participants: "Participants",
 };
 
 function safeFilename(name: string): string {
@@ -52,6 +53,7 @@ export class ActivityCommand extends Command {
                         .addChoices(
                             { name: STAT_DISPLAY.score, value: "score" },
                             { name: STAT_DISPLAY.wins, value: "wins" },
+                            { name: STAT_DISPLAY.losses, value: "losses" },
                             { name: STAT_DISPLAY.losses, value: "losses" },
                         ),
                 ),
