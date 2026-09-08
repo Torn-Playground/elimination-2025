@@ -39,19 +39,19 @@ async function fetchTextChannel(
 
 function summarizeBoard(
     primary: string,
-    secondary: string,
+    secondary: string | null,
     farms: string[],
     channelId?: string,
 ): string {
     const location = channelId ? ` in <#${channelId}>` : "";
-    const farmsLine =
-        farms.length === 0
-            ? "Farms: none"
-            : `Farms: ${farms.map((farm) => `**${farm}**`).join(", ")}`;
-    return (
-        `Targets updated${location}:\n` +
-        `Primary: **${primary}** · Secondary: **${secondary}**\n${farmsLine}`
-    );
+    const lines = [`Primary: **${primary}**`];
+    if (secondary) {
+        lines.push(`Secondary: **${secondary}**`);
+    }
+    if (farms.length > 0) {
+        lines.push(`Farms: ${farms.map((farm) => `**${farm}**`).join(", ")}`);
+    }
+    return `Targets updated${location}:\n${lines.join("\n")}`;
 }
 
 export class TargetsCommand extends Subcommand {
@@ -89,7 +89,7 @@ export class TargetsCommand extends Subcommand {
                 .addSubcommand((sub) =>
                     sub
                         .setName("set")
-                        .setDescription("Set the primary and secondary target")
+                        .setDescription("Set the primary (and optional secondary) target")
                         .addStringOption((option) =>
                             option
                                 .setName("primary")
@@ -101,7 +101,7 @@ export class TargetsCommand extends Subcommand {
                             option
                                 .setName("secondary")
                                 .setDescription("The secondary target team")
-                                .setRequired(true)
+                                .setRequired(false)
                                 .setAutocomplete(true),
                         ),
                 )
@@ -153,18 +153,25 @@ export class TargetsCommand extends Subcommand {
         return guild;
     }
 
-    private buildEmbed(primary: string, secondary: string, farms: string[]): EmbedBuilder {
-        const farmValue =
-            farms.length === 0 ? "None yet — add with `/targets farm add`" : farms.join("\n");
+    private buildEmbed(primary: string, secondary: string | null, farms: string[]): EmbedBuilder {
+        const fields = [
+            { name: "Primary target", value: primary, inline: true },
+            ...(secondary ? [{ name: "Secondary target", value: secondary, inline: true }] : []),
+            ...(farms.length > 0
+                ? [
+                      {
+                          name: "Farms",
+                          value: farms.join("\n").slice(0, FARMS_FIELD_LIMIT),
+                          inline: false,
+                      },
+                  ]
+                : []),
+        ];
         return new EmbedBuilder()
             .setColor(BOARD_COLOR)
             .setTitle("Elimination Targets")
             .setTimestamp()
-            .addFields([
-                { name: "Primary target", value: primary, inline: true },
-                { name: "Secondary target", value: secondary, inline: true },
-                { name: "Farms", value: farmValue.slice(0, FARMS_FIELD_LIMIT), inline: false },
-            ]);
+            .addFields(fields);
     }
 
     // Re-render the board embed in <channelId>, editing the stored message when possible and
@@ -175,7 +182,7 @@ export class TargetsCommand extends Subcommand {
     ): Promise<{ channelId: string; messageId: string } | null> {
         const settings = await getGuildSettings(guild.id);
         const channel = await fetchTextChannel(guild, channelId);
-        if (!channel || !settings.targetsPrimary || !settings.targetsSecondary) {
+        if (!channel || !settings.targetsPrimary) {
             return null;
         }
 
@@ -218,9 +225,10 @@ export class TargetsCommand extends Subcommand {
         await this.defer(interaction);
         const guild = this.requiredGuild(interaction);
         const primary = interaction.options.getString("primary", true).trim();
-        const secondary = interaction.options.getString("secondary", true).trim();
-        if (!primary || !secondary) {
-            await interaction.editReply({ content: "The target teams cannot be empty." });
+        // Omitted secondary clears the field: /targets set defines the full primary/secondary state.
+        const secondary = interaction.options.getString("secondary")?.trim() || null;
+        if (!primary) {
+            await interaction.editReply({ content: "The primary target cannot be empty." });
             return;
         }
 
@@ -312,13 +320,13 @@ export class TargetsCommand extends Subcommand {
         await this.finishFarmChange(guild, interaction, message);
     }
 
-    // A farm mutation can only apply once the board (channel + primary/secondary) exists.
+    // A farm mutation can only apply once the board (channel + primary target) exists.
     private async ensureBoard(
         guild: Guild,
         interaction: Subcommand.ChatInputCommandInteraction,
     ): Promise<boolean> {
         const settings = await getGuildSettings(guild.id);
-        if (!settings.targetsChannelId || !settings.targetsPrimary || !settings.targetsSecondary) {
+        if (!settings.targetsChannelId || !settings.targetsPrimary) {
             await interaction.editReply({
                 content:
                     "No targets board yet. Configure the channel with `/config channel targets`, then set it up with `/targets set`.",

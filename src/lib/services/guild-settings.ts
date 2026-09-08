@@ -30,13 +30,13 @@ export async function getGuildSettings(guildId: string): Promise<GuildSettings> 
 async function saveGuildSettings(
     guildId: string,
     fields: Partial<{
-        verifiedRoleId: string;
-        notVerifiedChannelId: string;
-        managementChannelId: string;
-        targetsChannelId: string;
-        targetsMessageId: string;
-        targetsPrimary: string;
-        targetsSecondary: string;
+        verifiedRoleId: string | null;
+        notVerifiedChannelId: string | null;
+        managementChannelId: string | null;
+        targetsChannelId: string | null;
+        targetsMessageId: string | null;
+        targetsPrimary: string | null;
+        targetsSecondary: string | null;
     }>,
 ): Promise<void> {
     await db
@@ -73,6 +73,6 @@ export function setTargetPrimary(guildId: string, name: string): Promise<void> {
     return saveGuildSettings(guildId, { targetsPrimary: name });
 }
 
-export function setTargetSecondary(guildId: string, name: string): Promise<void> {
+export function setTargetSecondary(guildId: string, name: string | null): Promise<void> {
     return saveGuildSettings(guildId, { targetsSecondary: name });
 }
