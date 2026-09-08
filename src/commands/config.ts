@@ -9,6 +9,7 @@ import { addApiKey, findApiKeyByKey, listApiKeys, removeApiKey } from "../lib/se
 import {
     setManagementChannel,
     setNotVerifiedChannel,
+    setTargetsChannel,
     setVerifiedRole,
 } from "../lib/services/guild-settings";
 import { addTeamRole, listTeamRoles, removeTeamRole } from "../lib/services/team-roles";
@@ -63,6 +64,7 @@ export class ConfigCommand extends Subcommand {
                     entries: [
                         { name: "not-verified", chatInputRun: "chatInputChannelNotVerified" },
                         { name: "management", chatInputRun: "chatInputChannelManagement" },
+                        { name: "targets", chatInputRun: "chatInputChannelTargets" },
                     ],
                 },
             ],
@@ -185,6 +187,17 @@ export class ConfigCommand extends Subcommand {
                                     option
                                         .setName("channel")
                                         .setDescription("The management channel")
+                                        .setRequired(true),
+                                ),
+                        )
+                        .addSubcommand((sub) =>
+                            sub
+                                .setName("targets")
+                                .setDescription("Set the channel for the elimination targets board")
+                                .addChannelOption((option) =>
+                                    option
+                                        .setName("channel")
+                                        .setDescription("The targets channel")
                                         .setRequired(true),
                                 ),
                         ),
@@ -348,6 +361,17 @@ export class ConfigCommand extends Subcommand {
         }
         await setManagementChannel(this.requiredGuild(interaction).id, channel.id);
         await interaction.editReply({ content: `Management channel set to <#${channel.id}>.` });
+    }
+
+    public async chatInputChannelTargets(interaction: Subcommand.ChatInputCommandInteraction) {
+        await this.defer(interaction);
+        const channel = interaction.options.getChannel("channel", true);
+        if (!canSendMessages(channel)) {
+            await interaction.editReply({ content: "That must be a text channel." });
+            return;
+        }
+        await setTargetsChannel(this.requiredGuild(interaction).id, channel.id);
+        await interaction.editReply({ content: `Targets channel set to <#${channel.id}>.` });
     }
 
     // ---- autocomplete for /config team-roles remove name ----

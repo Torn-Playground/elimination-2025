@@ -23,6 +23,10 @@ export const guildSettings = mysqlTable("guild_settings", {
     verifiedRoleId: varchar("verified_role_id", { length: DISCORD_ID_LEN }),
     notVerifiedChannelId: varchar("not_verified_channel_id", { length: DISCORD_ID_LEN }),
     managementChannelId: varchar("management_channel_id", { length: DISCORD_ID_LEN }),
+    targetsChannelId: varchar("targets_channel_id", { length: DISCORD_ID_LEN }),
+    targetsMessageId: varchar("targets_message_id", { length: DISCORD_ID_LEN }),
+    targetsPrimary: varchar("targets_primary", { length: NAME_LEN }),
+    targetsSecondary: varchar("targets_secondary", { length: NAME_LEN }),
 });
 
 export const teamRoles = mysqlTable(
@@ -31,6 +35,15 @@ export const teamRoles = mysqlTable(
         guildId: varchar("guild_id", { length: DISCORD_ID_LEN }).notNull(),
         name: varchar("name", { length: NAME_LEN }).notNull(),
         roleId: varchar("role_id", { length: DISCORD_ID_LEN }).notNull(),
+    },
+    (table) => [primaryKey({ columns: [table.guildId, table.name] })],
+);
+
+export const targetFarms = mysqlTable(
+    "target_farms",
+    {
+        guildId: varchar("guild_id", { length: DISCORD_ID_LEN }).notNull(),
+        name: varchar("name", { length: NAME_LEN }).notNull(),
     },
     (table) => [primaryKey({ columns: [table.guildId, table.name] })],
 );
