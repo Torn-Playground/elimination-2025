@@ -24,6 +24,7 @@ import {
 
 const MAX_AUTOCOMPLETE_CHOICES = 25;
 const BOARD_COLOR = 0xe74c3c;
+const BOARD_TITLE = "Elimination Targets";
 const FARMS_FIELD_LIMIT = 1024;
 
 async function fetchTextChannel(
@@ -144,7 +145,6 @@ export class TargetsCommand extends Subcommand {
         await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
     }
 
-    // The GuildOnly precondition guarantees a guild context; kept as an explicit boundary check.
     private requiredGuild(interaction: { guild: Guild | null }): Guild {
         const guild = interaction.guild;
         if (!guild) {
@@ -169,13 +169,31 @@ export class TargetsCommand extends Subcommand {
         ];
         return new EmbedBuilder()
             .setColor(BOARD_COLOR)
-            .setTitle("Elimination Targets")
+            .setTitle(BOARD_TITLE)
             .setTimestamp()
             .addFields(fields);
     }
 
-    // Re-render the board embed in <channelId>: remove the previous board message (if any) and
-    // post a fresh one, keeping the board at the newest message position.
+    private async removeStaleBoards(channel: GuildTextBasedChannel, keepId: string): Promise<void> {
+        const botId = container.client.user?.id;
+        if (!botId) {
+            return;
+        }
+        const recent = await channel.messages.fetch({ limit: 50 }).catch(() => null);
+        if (!recent) {
+            return;
+        }
+        const stale = recent.filter(
+            (message) =>
+                message.id !== keepId &&
+                message.author.id === botId &&
+                message.embeds.some((embed) => embed.title === BOARD_TITLE),
+        );
+        for (const message of stale.values()) {
+            await message.delete().catch(() => {});
+        }
+    }
+
     private async refreshBoard(
         guild: Guild,
         channelId: string,
@@ -202,6 +220,7 @@ export class TargetsCommand extends Subcommand {
         }
 
         const sent = await channel.send({ embeds: [embed] });
+        await this.removeStaleBoards(channel, sent.id);
         await setTargetsLocation(guild.id, channel.id, sent.id);
         return { channelId: channel.id, messageId: sent.id };
     }
@@ -307,7 +326,6 @@ export class TargetsCommand extends Subcommand {
         await this.finishFarmChange(guild, interaction, message);
     }
 
-    // A farm mutation can only apply once the board (channel + primary target) exists.
     private async ensureBoard(
         guild: Guild,
         interaction: Subcommand.ChatInputCommandInteraction,
@@ -323,7 +341,6 @@ export class TargetsCommand extends Subcommand {
         return true;
     }
 
-    // Re-render the board after a farm mutation, then confirm (or report the board is unreachable).
     private async finishFarmChange(
         guild: Guild,
         interaction: Subcommand.ChatInputCommandInteraction,
@@ -340,8 +357,6 @@ export class TargetsCommand extends Subcommand {
                 : `${detail} The board message could not be updated (channel deleted?). Run \`/targets set\` to recreate it.`,
         });
     }
-
-    // ---- autocomplete ----
 
     public override async autocompleteRun(interaction: AutocompleteInteraction) {
         const guildId = interaction.guildId;
