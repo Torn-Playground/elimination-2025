@@ -14,6 +14,7 @@ const STAT_DISPLAY: Record<ActivityStat, string> = {
     wins: "Wins",
     losses: "Losses",
     participants: "Participants",
+    lives: "Lives",
 };
 
 function safeFilename(name: string): string {
@@ -55,6 +56,7 @@ export class ActivityCommand extends Command {
                             { name: STAT_DISPLAY.wins, value: "wins" },
                             { name: STAT_DISPLAY.losses, value: "losses" },
                             { name: STAT_DISPLAY.participants, value: "participants" },
+                            { name: STAT_DISPLAY.lives, value: "lives" },
                         ),
                 ),
         );

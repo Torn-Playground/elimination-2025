@@ -28,6 +28,7 @@ const COLORS: Record<ActivityStat, string> = {
     wins: "#4bc47e",
     losses: "#ec5353",
     participants: "#ece953",
+    lives: "#c153ec",
 };
 const BG_COLOR = "#1e1f22";
 const PLOT_COLOR = "#17181b";
@@ -37,7 +38,7 @@ const TEXT_COLOR = "#b3bac2";
 const TEXT_STRONG = "#e6e9ee";
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-export type ActivityStat = "score" | "wins" | "losses" | "participants";
+export type ActivityStat = "score" | "wins" | "losses" | "participants" | "lives";
 
 type SeriesPoint = { t: number; v: number };
 
@@ -63,6 +64,8 @@ function statColumn(stat: ActivityStat) {
             return snapshots.losses;
         case "participants":
             return snapshots.participants;
+        case "lives":
+            return snapshots.lives;
     }
 }
 
