@@ -76,3 +76,11 @@ export function setTargetPrimary(guildId: string, name: string): Promise<void> {
 export function setTargetSecondary(guildId: string, name: string | null): Promise<void> {
     return saveGuildSettings(guildId, { targetsSecondary: name });
 }
+
+export function clearTargetsBoard(guildId: string): Promise<void> {
+    return saveGuildSettings(guildId, {
+        targetsPrimary: null,
+        targetsSecondary: null,
+        targetsMessageId: null,
+    });
+}

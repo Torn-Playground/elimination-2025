@@ -10,6 +10,7 @@ import {
 } from "discord.js";
 import { listTrackedTeams } from "../lib/services/activity-chart";
 import {
+    clearTargetsBoard,
     getGuildSettings,
     setTargetPrimary,
     setTargetSecondary,
@@ -69,6 +70,10 @@ export class TargetsCommand extends Subcommand {
                     chatInputRun: "chatInputSet",
                 },
                 {
+                    name: "clear",
+                    chatInputRun: "chatInputClear",
+                },
+                {
                     name: "farm",
                     type: "group",
                     entries: [
@@ -105,6 +110,11 @@ export class TargetsCommand extends Subcommand {
                                 .setRequired(false)
                                 .setAutocomplete(true),
                         ),
+                )
+                .addSubcommand((sub) =>
+                    sub
+                        .setName("clear")
+                        .setDescription("Clear the targets board and remove its message"),
                 )
                 .addSubcommandGroup((group) =>
                     group
@@ -273,6 +283,27 @@ export class TargetsCommand extends Subcommand {
                 board.channelId,
             ),
         });
+    }
+
+    public async chatInputClear(interaction: Subcommand.ChatInputCommandInteraction) {
+        await this.defer(interaction);
+        const guild = this.requiredGuild(interaction);
+        const settings = await getGuildSettings(guild.id);
+
+        if (settings.targetsChannelId && settings.targetsMessageId) {
+            const channel = await fetchTextChannel(guild, settings.targetsChannelId);
+            if (channel) {
+                const existing = await channel.messages
+                    .fetch(settings.targetsMessageId)
+                    .catch(() => null);
+                if (existing && existing.author.id === container.client.user?.id) {
+                    await existing.delete().catch(() => {});
+                }
+            }
+        }
+
+        await Promise.all([clearTargetFarms(guild.id), clearTargetsBoard(guild.id)]);
+        await interaction.editReply({ content: "Targets board cleared." });
     }
 
     // ---- /targets farm ----
