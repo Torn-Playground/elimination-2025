@@ -7,6 +7,7 @@ import {
 } from "discord.js";
 import { addApiKey, findApiKeyByKey, listApiKeys, removeApiKey } from "../lib/services/api-keys";
 import {
+    getGuildSettings,
     setManagementChannel,
     setNotVerifiedChannel,
     setTargetsChannel,
@@ -370,7 +371,24 @@ export class ConfigCommand extends Subcommand {
             await interaction.editReply({ content: "That must be a text channel." });
             return;
         }
-        await setTargetsChannel(this.requiredGuild(interaction).id, channel.id);
+
+        const guild = this.requiredGuild(interaction);
+        const settings = await getGuildSettings(guild.id);
+        // The board moved to another channel: remove the old message best-effort.
+        if (
+            settings.targetsChannelId &&
+            settings.targetsChannelId !== channel.id &&
+            settings.targetsMessageId
+        ) {
+            const oldChannel = await guild.channels
+                .fetch(settings.targetsChannelId)
+                .catch(() => null);
+            if (oldChannel?.isTextBased()) {
+                await oldChannel.messages.delete(settings.targetsMessageId).catch(() => {});
+            }
+        }
+
+        await setTargetsChannel(guild.id, channel.id);
         await interaction.editReply({ content: `Targets channel set to <#${channel.id}>.` });
     }
 

@@ -174,8 +174,8 @@ export class TargetsCommand extends Subcommand {
             .addFields(fields);
     }
 
-    // Re-render the board embed in <channelId>, editing the stored message when possible and
-    // otherwise posting a fresh one (e.g. the original was deleted or we relocated).
+    // Re-render the board embed in <channelId>: remove the previous board message (if any) and
+    // post a fresh one, keeping the board at the newest message position.
     private async refreshBoard(
         guild: Guild,
         channelId: string,
@@ -192,25 +192,12 @@ export class TargetsCommand extends Subcommand {
             await listTargetFarms(guild.id),
         );
 
-        // The board moved to another channel (via /config channel targets): drop the old message best-effort.
-        if (
-            settings.targetsChannelId &&
-            settings.targetsChannelId !== channel.id &&
-            settings.targetsMessageId
-        ) {
-            const oldChannel = await fetchTextChannel(guild, settings.targetsChannelId);
-            if (oldChannel) {
-                await oldChannel.messages.delete(settings.targetsMessageId).catch(() => {});
-            }
-        }
-
         if (settings.targetsMessageId) {
             const existing = await channel.messages
                 .fetch(settings.targetsMessageId)
                 .catch(() => null);
             if (existing && existing.author.id === container.client.user?.id) {
-                await existing.edit({ embeds: [embed] });
-                return { channelId, messageId: existing.id };
+                await existing.delete().catch(() => {});
             }
         }
 
