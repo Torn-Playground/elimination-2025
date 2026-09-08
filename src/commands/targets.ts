@@ -184,11 +184,13 @@ export class TargetsCommand extends Subcommand {
             .addFields(fields);
     }
 
-    private async removeStaleBoards(channel: GuildTextBasedChannel, keepId: string): Promise<void> {
-        const botId = container.client.user?.id;
-        if (!botId) {
-            return;
-        }
+    // Delete board messages in the channel except <keepId>. Matches on the embed title rather
+    // than the author, so stale copies from earlier sessions/tokens are removed too; deleting
+    // someone else's message requires Manage Messages, failures are logged instead of swallowed.
+    private async removeBoardCopies(
+        channel: GuildTextBasedChannel,
+        keepId?: string,
+    ): Promise<void> {
         const recent = await channel.messages.fetch({ limit: 50 }).catch(() => null);
         if (!recent) {
             return;
@@ -196,12 +198,28 @@ export class TargetsCommand extends Subcommand {
         const stale = recent.filter(
             (message) =>
                 message.id !== keepId &&
-                message.author.id === botId &&
                 message.embeds.some((embed) => embed.title === BOARD_TITLE),
         );
         for (const message of stale.values()) {
-            await message.delete().catch(() => {});
+            await message.delete().catch((error) => {
+                container.logger.warn(
+                    `Failed to delete targets board message ${message.id}: ${error}`,
+                );
+            });
         }
+    }
+
+    private async deleteStoredMessage(
+        channel: GuildTextBasedChannel,
+        messageId: string,
+    ): Promise<void> {
+        const message = await channel.messages.fetch(messageId).catch(() => null);
+        if (!message) {
+            return;
+        }
+        await message.delete().catch((error) => {
+            container.logger.warn(`Failed to delete targets board message ${messageId}: ${error}`);
+        });
     }
 
     private async refreshBoard(
@@ -221,16 +239,11 @@ export class TargetsCommand extends Subcommand {
         );
 
         if (settings.targetsMessageId) {
-            const existing = await channel.messages
-                .fetch(settings.targetsMessageId)
-                .catch(() => null);
-            if (existing && existing.author.id === container.client.user?.id) {
-                await existing.delete().catch(() => {});
-            }
+            await this.deleteStoredMessage(channel, settings.targetsMessageId);
         }
 
         const sent = await channel.send({ embeds: [embed] });
-        await this.removeStaleBoards(channel, sent.id);
+        await this.removeBoardCopies(channel, sent.id);
         await setTargetsLocation(guild.id, channel.id, sent.id);
         return { channelId: channel.id, messageId: sent.id };
     }
@@ -290,15 +303,14 @@ export class TargetsCommand extends Subcommand {
         const guild = this.requiredGuild(interaction);
         const settings = await getGuildSettings(guild.id);
 
-        if (settings.targetsChannelId && settings.targetsMessageId) {
+        if (settings.targetsChannelId) {
             const channel = await fetchTextChannel(guild, settings.targetsChannelId);
             if (channel) {
-                const existing = await channel.messages
-                    .fetch(settings.targetsMessageId)
-                    .catch(() => null);
-                if (existing && existing.author.id === container.client.user?.id) {
-                    await existing.delete().catch(() => {});
+                if (settings.targetsMessageId) {
+                    await this.deleteStoredMessage(channel, settings.targetsMessageId);
                 }
+                // Also sweep recent copies so manually duplicated boards are removed as well.
+                await this.removeBoardCopies(channel);
             }
         }
 
