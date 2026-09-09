@@ -30,6 +30,32 @@ const COLORS: Record<ActivityStat, string> = {
     participants: "#ece953",
     lives: "#c153ec",
 };
+
+// Cache rows for the all-teams chart live under this synthetic team id
+const ALL_TEAMS_TEAM_ID = -1;
+
+const TEAM_PALETTE = [
+    "#1f77b4",
+    "#ff7f0e",
+    "#2ca02c",
+    "#d62728",
+    "#9467bd",
+    "#8c564b",
+    "#e377c2",
+    "#7f7f7f",
+    "#bcbd22",
+    "#17becf",
+    "#aec7e8",
+    "#ffbb78",
+    "#98df8a",
+    "#ff9896",
+    "#c5b0d5",
+    "#c49c94",
+    "#f7b6d2",
+    "#c7c7c7",
+    "#dbdb8d",
+    "#9edae5",
+];
 const BG_COLOR = "#1e1f22";
 const PLOT_COLOR = "#17181b";
 const GRID_COLOR = "rgba(255, 255, 255, 0.06)";
@@ -53,6 +79,68 @@ export type ActivityChartResult = {
     firstValue: number;
     lastValue: number;
 };
+
+export type AllTeamsActivityChartResult = {
+    png: Buffer;
+    cached: boolean;
+    stat: ActivityStat;
+    teamCount: number;
+    eliminatedCount: number;
+    pointCount: number;
+};
+
+type SnapshotRow = {
+    teamId: number;
+    name: string;
+    eliminated: boolean;
+    t: Date;
+    v: number;
+};
+
+type TeamSeries = {
+    name: string;
+    points: SeriesPoint[];
+    dot: boolean;
+    color: string;
+};
+
+export function buildTeamSeries(rows: SnapshotRow[]): {
+    series: TeamSeries[];
+    maxValue: number;
+    from: number;
+    to: number;
+} {
+    const byTeam = new Map<number, { name: string; points: SeriesPoint[] }>();
+    const stopped = new Set<number>();
+    let maxValue = 0;
+    let from = Number.POSITIVE_INFINITY;
+    let to = Number.NEGATIVE_INFINITY;
+
+    for (const row of rows) {
+        if (stopped.has(row.teamId)) continue;
+        let team = byTeam.get(row.teamId);
+        if (!team) {
+            team = { name: row.name, points: [] };
+            byTeam.set(row.teamId, team);
+        }
+        team.name = row.name;
+        const t = row.t.getTime();
+        team.points.push({ t, v: row.v });
+        if (row.v > maxValue) maxValue = row.v;
+        if (t < from) from = t;
+        if (t > to) to = t;
+        if (row.eliminated) stopped.add(row.teamId);
+    }
+
+    // Map insertion order follows the ascending teamId row order, so palette indexes are stable.
+    const series = [...byTeam.values()].map((team, index) => ({
+        name: team.name,
+        points: sampleSeries(team.points),
+        dot: team.points.length <= 90,
+        color: TEAM_PALETTE[index % TEAM_PALETTE.length],
+    }));
+    return { series, maxValue, from, to };
+}
 
 function statColumn(stat: ActivityStat) {
     switch (stat) {
@@ -181,6 +269,84 @@ export async function getActivityChart(
         to,
         firstValue: first.v,
         lastValue: last.v,
+    };
+}
+
+export async function getAllTeamsActivityChart(
+    stat: ActivityStat,
+): Promise<AllTeamsActivityChartResult | null> {
+    const column = sql<number>`${statColumn(stat)}`;
+
+    const [agg] = await db
+        .select({
+            pointCount: sql<number>`count(*)`,
+            teamCount: sql<number>`count(distinct ${snapshots.teamId})`,
+            eliminatedCount: sql<number>`count(distinct if(${snapshots.eliminated}, ${snapshots.teamId}, null))`,
+            lastObservedAt: sql<Date>`max(${snapshots.observedAt})`,
+        })
+        .from(snapshots);
+    if (!agg || agg.pointCount === 0 || agg.lastObservedAt == null) return null;
+
+    const [cached] = await db
+        .select()
+        .from(cacheTable)
+        .where(and(eq(cacheTable.teamId, ALL_TEAMS_TEAM_ID), eq(cacheTable.stat, stat)))
+        .limit(1);
+    if (cached && cached.lastObservedAt.getTime() === agg.lastObservedAt.getTime()) {
+        return {
+            png: Buffer.from(cached.png as Uint8Array),
+            cached: true,
+            stat,
+            teamCount: agg.teamCount,
+            eliminatedCount: agg.eliminatedCount,
+            pointCount: agg.pointCount,
+        };
+    }
+
+    const rows = await db
+        .select({
+            teamId: snapshots.teamId,
+            name: snapshots.name,
+            eliminated: snapshots.eliminated,
+            t: snapshots.observedAt,
+            v: column,
+        })
+        .from(snapshots)
+        .orderBy(asc(snapshots.teamId), asc(snapshots.observedAt));
+
+    const { series, maxValue, from, to } = buildTeamSeries(rows);
+    if (series.length === 0) return null;
+
+    await ensureFont();
+    const png = await renderAllTeamsChart({
+        stat,
+        series,
+        maxValue,
+        pointCount: agg.pointCount,
+        teamCount: agg.teamCount,
+        from,
+        to,
+    });
+
+    await db
+        .insert(cacheTable)
+        .values({
+            teamId: ALL_TEAMS_TEAM_ID,
+            stat,
+            lastObservedAt: agg.lastObservedAt,
+            png,
+        })
+        .onDuplicateKeyUpdate({
+            set: { lastObservedAt: agg.lastObservedAt, png },
+        });
+
+    return {
+        png,
+        cached: false,
+        stat,
+        teamCount: agg.teamCount,
+        eliminatedCount: agg.eliminatedCount,
+        pointCount: agg.pointCount,
     };
 }
 
@@ -400,6 +566,159 @@ async function renderActivityChart(options: {
         "right",
         "middle",
     );
+
+    return encodePng(image);
+}
+
+const LEGEND_COLUMNS = 2;
+const LEGEND_ROW_HEIGHT = 17;
+const LEGEND_SWATCH = 11;
+const LEGEND_TOP = HEIGHT - 16;
+
+function truncateLabel(text: string, maxChars: number): string {
+    return text.length > maxChars ? `${text.slice(0, maxChars - 1)}…` : text;
+}
+
+async function renderAllTeamsChart(options: {
+    stat: ActivityStat;
+    series: { name: string; color: string; points: SeriesPoint[]; dot: boolean }[];
+    maxValue: number;
+    pointCount: number;
+    teamCount: number;
+    from: number;
+    to: number;
+}): Promise<Buffer> {
+    const legendRows = Math.ceil(options.series.length / LEGEND_COLUMNS);
+    const height = LEGEND_TOP + legendRows * LEGEND_ROW_HEIGHT + 10;
+    const image = PImage.make(WIDTH, height);
+    const ctx = image.getContext("2d") as PImage.Context;
+
+    ctx.fillStyle = BG_COLOR;
+    ctx.fillRect(0, 0, WIDTH, height);
+
+    ctx.fillStyle = PLOT_COLOR;
+    ctx.fillRect(MARGIN_LEFT, MARGIN_TOP, PLOT_WIDTH, PLOT_HEIGHT);
+
+    drawLabel(ctx, "All teams", MARGIN_LEFT, 34, 22, TEXT_STRONG);
+    drawLabel(
+        ctx,
+        `${statLabel(options.stat)} history — each line stops at that team's elimination`,
+        MARGIN_LEFT,
+        60,
+        14,
+        TEXT_COLOR,
+    );
+    drawLabel(
+        ctx,
+        `${options.teamCount} teams · ${formatNumber(options.pointCount)} data points`,
+        WIDTH - MARGIN_RIGHT,
+        60,
+        13,
+        TEXT_COLOR,
+        "right",
+    );
+
+    const { top, ticks } = yTicks(options.maxValue);
+    const span = options.to - options.from;
+    const xOf = (t: number): number => {
+        if (span <= 0) return MARGIN_LEFT + PLOT_WIDTH / 2;
+        return MARGIN_LEFT + (PLOT_WIDTH * (t - options.from)) / span;
+    };
+    const yOf = (value: number): number => MARGIN_TOP + PLOT_HEIGHT * (1 - value / top);
+
+    ctx.strokeStyle = GRID_COLOR;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (const tick of ticks) {
+        const y = yOf(tick);
+        ctx.moveTo(MARGIN_LEFT, y);
+        ctx.lineTo(MARGIN_LEFT + PLOT_WIDTH, y);
+    }
+    for (const x of xTickPositions(options.from, options.to)) {
+        ctx.moveTo(x, MARGIN_TOP);
+        ctx.lineTo(x, MARGIN_TOP + PLOT_HEIGHT);
+    }
+    ctx.stroke();
+
+    ctx.strokeStyle = BORDER_COLOR;
+    ctx.strokeRect(MARGIN_LEFT, MARGIN_TOP, PLOT_WIDTH, PLOT_HEIGHT);
+
+    for (const tick of ticks) {
+        const label = trimZeroes(compactValue(tick));
+        drawLabel(ctx, label, MARGIN_LEFT - 12, yOf(tick), 13, TEXT_COLOR, "right", "middle");
+    }
+
+    const xPositions = xTickPositions(options.from, options.to);
+    const labelEvery = Math.max(1, Math.ceil(xPositions.length / 6));
+    for (let i = 0; i < Math.max(1, xPositions.length - 1); i += labelEvery) {
+        const x = xPositions[i];
+        const t = span <= 0 ? options.from : options.from + span * (i / (xPositions.length - 1));
+        drawLabel(
+            ctx,
+            timeLabel(t, span),
+            x,
+            MARGIN_TOP + PLOT_HEIGHT + 20,
+            13,
+            TEXT_COLOR,
+            "center",
+            "middle",
+        );
+    }
+
+    for (const team of options.series) {
+        ctx.strokeStyle = team.color;
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        for (const [i, point] of team.points.entries()) {
+            const x = xOf(point.t);
+            const y = yOf(point.v);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+    }
+
+    for (const team of options.series) {
+        if (!team.dot) continue;
+        ctx.fillStyle = team.color;
+        for (const point of team.points) {
+            ctx.beginPath();
+            ctx.arc(xOf(point.t), yOf(point.v), 2.4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    drawLabel(
+        ctx,
+        "UTC",
+        WIDTH - MARGIN_RIGHT,
+        MARGIN_TOP + PLOT_HEIGHT + 20,
+        13,
+        TEXT_COLOR,
+        "right",
+        "middle",
+    );
+
+    const columnWidth = (PLOT_WIDTH - 16) / LEGEND_COLUMNS;
+    const maxChars = Math.floor(columnWidth / 8);
+    for (const [i, team] of options.series.entries()) {
+        const column = i % LEGEND_COLUMNS;
+        const row = Math.floor(i / LEGEND_COLUMNS);
+        const x = MARGIN_LEFT + column * (columnWidth + 16);
+        const y = LEGEND_TOP + row * LEGEND_ROW_HEIGHT;
+        ctx.fillStyle = team.color;
+        ctx.fillRect(x, y + 3, LEGEND_SWATCH, LEGEND_SWATCH);
+        drawLabel(
+            ctx,
+            truncateLabel(team.name, maxChars),
+            x + LEGEND_SWATCH + 7,
+            y + LEGEND_ROW_HEIGHT / 2,
+            13,
+            TEXT_COLOR,
+            "left",
+            "middle",
+        );
+    }
 
     return encodePng(image);
 }

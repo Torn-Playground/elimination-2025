@@ -4,6 +4,7 @@ import {
     type ActivityStat,
     formatNumber,
     getActivityChart,
+    getAllTeamsActivityChart,
     listTrackedTeams,
 } from "../lib/services/activity-chart";
 
@@ -30,7 +31,7 @@ export class ActivityCommand extends Command {
         super(context, {
             ...options,
             name: "activity",
-            description: "Show a chart of a team's tracked stat history",
+            description: "Show a chart of a team's (or all teams') tracked stat history",
         });
     }
 
@@ -38,12 +39,12 @@ export class ActivityCommand extends Command {
         registry.registerChatInputCommand((builder) =>
             builder
                 .setName("activity")
-                .setDescription("Show a chart of a team's tracked stat history")
+                .setDescription("Show a chart of a team's (or all teams') tracked stat history")
                 .addStringOption((option) =>
                     option
                         .setName("team")
-                        .setDescription("What team do you want the chart for.")
-                        .setRequired(true)
+                        .setDescription("Team to chart. Leave empty for one chart with all teams.")
+                        .setRequired(false)
                         .setAutocomplete(true),
                 )
                 .addStringOption((option) =>
@@ -65,31 +66,31 @@ export class ActivityCommand extends Command {
     public override async chatInputRun(interaction: ChatInputCommandInteraction) {
         await interaction.deferReply();
 
-        const teamName = interaction.options.getString("team", true);
+        const teamName = interaction.options.getString("team");
         const stat = interaction.options.getString("stat", true) as ActivityStat;
 
         try {
-            const chart = await getActivityChart(teamName, stat);
+            if (teamName) {
+                await this.replyTeamChart(interaction, teamName, stat);
+                return;
+            }
+
+            const chart = await getAllTeamsActivityChart(stat);
             if (!chart) {
                 await interaction.editReply({
-                    content: `No tracked history for a team named "${teamName}" yet.`,
+                    content: "No tracked history yet.",
                 });
                 return;
             }
 
             const summary = [
-                `**${chart.resolvedName}** — ${STAT_DISPLAY[stat]} history (${formatNumber(chart.count)} data points)`,
-                `Earliest: ${formatNumber(chart.firstValue)} · Latest: **${formatNumber(chart.lastValue)}**${chart.cached ? " · *cached image*" : ""}`,
+                `**All teams** — ${STAT_DISPLAY[stat]} history (${chart.teamCount} teams${chart.eliminatedCount > 0 ? `, ${chart.eliminatedCount} eliminated` : ""}, ${formatNumber(chart.pointCount)} data points)${chart.cached ? " · *cached image*" : ""}`,
+                "Each line stops at that team's elimination.",
             ].join("\n");
 
             await interaction.editReply({
                 content: summary,
-                files: [
-                    {
-                        attachment: chart.png,
-                        name: `${safeFilename(chart.resolvedName)}-${stat}.png`,
-                    },
-                ],
+                files: [{ attachment: chart.png, name: `all-teams-${stat}.png` }],
             });
         } catch (error) {
             console.error("Activity command error:", error);
@@ -97,6 +98,35 @@ export class ActivityCommand extends Command {
                 content: "An error occurred while generating the chart.",
             });
         }
+    }
+
+    private async replyTeamChart(
+        interaction: ChatInputCommandInteraction,
+        teamName: string,
+        stat: ActivityStat,
+    ): Promise<void> {
+        const chart = await getActivityChart(teamName, stat);
+        if (!chart) {
+            await interaction.editReply({
+                content: `No tracked history for a team named "${teamName}" yet.`,
+            });
+            return;
+        }
+
+        const summary = [
+            `**${chart.resolvedName}** — ${STAT_DISPLAY[stat]} history (${formatNumber(chart.count)} data points)`,
+            `Earliest: ${formatNumber(chart.firstValue)} · Latest: **${formatNumber(chart.lastValue)}**${chart.cached ? " · *cached image*" : ""}`,
+        ].join("\n");
+
+        await interaction.editReply({
+            content: summary,
+            files: [
+                {
+                    attachment: chart.png,
+                    name: `${safeFilename(chart.resolvedName)}-${stat}.png`,
+                },
+            ],
+        });
     }
 
     public override async autocompleteRun(interaction: AutocompleteInteraction) {
