@@ -47,6 +47,7 @@ export class ActivityCommand extends Command {
                             .setDescription(
                                 "Team to chart. Leave empty for one chart with all teams.",
                             )
+                            .setRequired(false)
                             .setAutocomplete(true),
                     )
                     .addStringOption((option) =>
