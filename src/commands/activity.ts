@@ -43,15 +43,6 @@ export class ActivityCommand extends Command {
                     .setDescription("Show a chart of a team's (or all teams') tracked stat history")
                     .addStringOption((option) =>
                         option
-                            .setName("team")
-                            .setDescription(
-                                "Team to chart. Leave empty for one chart with all teams.",
-                            )
-                            .setRequired(false)
-                            .setAutocomplete(true),
-                    )
-                    .addStringOption((option) =>
-                        option
                             .setName("stat")
                             .setDescription("Which stat should be on the chart.")
                             .setRequired(true)
@@ -62,6 +53,14 @@ export class ActivityCommand extends Command {
                                 { name: STAT_DISPLAY.participants, value: "participants" },
                                 { name: STAT_DISPLAY.lives, value: "lives" },
                             ),
+                    )
+                    .addStringOption((option) =>
+                        option
+                            .setName("team")
+                            .setDescription(
+                                "Team to chart. Leave empty for one chart with all teams.",
+                            )
+                            .setAutocomplete(true),
                     ),
             { idHints: ["1546282527478644796"] },
         );
