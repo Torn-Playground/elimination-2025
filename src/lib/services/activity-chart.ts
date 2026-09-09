@@ -282,17 +282,24 @@ export async function getAllTeamsActivityChart(
             pointCount: sql<number>`count(*)`,
             teamCount: sql<number>`count(distinct ${snapshots.teamId})`,
             eliminatedCount: sql<number>`count(distinct if(${snapshots.eliminated}, ${snapshots.teamId}, null))`,
-            lastObservedAt: sql<Date>`max(${snapshots.observedAt})`,
         })
         .from(snapshots);
-    if (!agg || agg.pointCount === 0 || agg.lastObservedAt == null) return null;
+    if (!agg || agg.pointCount === 0) return null;
+
+    // Select the column itself (not an aggregate) so drizzle decodes it into a Date.
+    const [latestRow] = await db
+        .select({ t: snapshots.observedAt })
+        .from(snapshots)
+        .orderBy(desc(snapshots.observedAt))
+        .limit(1);
+    const latestObservedAt = latestRow.t;
 
     const [cached] = await db
         .select()
         .from(cacheTable)
         .where(and(eq(cacheTable.teamId, ALL_TEAMS_TEAM_ID), eq(cacheTable.stat, stat)))
         .limit(1);
-    if (cached && cached.lastObservedAt.getTime() === agg.lastObservedAt.getTime()) {
+    if (cached && cached.lastObservedAt.getTime() === latestObservedAt.getTime()) {
         return {
             png: Buffer.from(cached.png as Uint8Array),
             cached: true,
@@ -333,11 +340,11 @@ export async function getAllTeamsActivityChart(
         .values({
             teamId: ALL_TEAMS_TEAM_ID,
             stat,
-            lastObservedAt: agg.lastObservedAt,
+            lastObservedAt: latestObservedAt,
             png,
         })
         .onDuplicateKeyUpdate({
-            set: { lastObservedAt: agg.lastObservedAt, png },
+            set: { lastObservedAt: latestObservedAt, png },
         });
 
     return {
