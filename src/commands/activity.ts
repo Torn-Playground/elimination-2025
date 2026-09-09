@@ -36,30 +36,33 @@ export class ActivityCommand extends Command {
     }
 
     public override registerApplicationCommands(registry: Command.Registry) {
-        registry.registerChatInputCommand((builder) =>
-            builder
-                .setName("activity")
-                .setDescription("Show a chart of a team's (or all teams') tracked stat history")
-                .addStringOption((option) =>
-                    option
-                        .setName("team")
-                        .setDescription("Team to chart. Leave empty for one chart with all teams.")
-                        .setRequired(false)
-                        .setAutocomplete(true),
-                )
-                .addStringOption((option) =>
-                    option
-                        .setName("stat")
-                        .setDescription("Which stat should be on the chart.")
-                        .setRequired(true)
-                        .addChoices(
-                            { name: STAT_DISPLAY.score, value: "score" },
-                            { name: STAT_DISPLAY.wins, value: "wins" },
-                            { name: STAT_DISPLAY.losses, value: "losses" },
-                            { name: STAT_DISPLAY.participants, value: "participants" },
-                            { name: STAT_DISPLAY.lives, value: "lives" },
-                        ),
-                ),
+        registry.registerChatInputCommand(
+            (builder) =>
+                builder
+                    .setName("activity")
+                    .setDescription("Show a chart of a team's (or all teams') tracked stat history")
+                    .addStringOption((option) =>
+                        option
+                            .setName("team")
+                            .setDescription(
+                                "Team to chart. Leave empty for one chart with all teams.",
+                            )
+                            .setAutocomplete(true),
+                    )
+                    .addStringOption((option) =>
+                        option
+                            .setName("stat")
+                            .setDescription("Which stat should be on the chart.")
+                            .setRequired(true)
+                            .addChoices(
+                                { name: STAT_DISPLAY.score, value: "score" },
+                                { name: STAT_DISPLAY.wins, value: "wins" },
+                                { name: STAT_DISPLAY.losses, value: "losses" },
+                                { name: STAT_DISPLAY.participants, value: "participants" },
+                                { name: STAT_DISPLAY.lives, value: "lives" },
+                            ),
+                    ),
+            { idHints: ["1546282527478644796"] },
         );
     }
 
