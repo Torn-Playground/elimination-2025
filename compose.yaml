@@ -1,3 +1,7 @@
+# Full stack: MariaDB + bot (with built-in web calendar) behind a Traefik proxy.
+# Required env (see .env.example): DISCORD_TOKEN, OWNER_ID, DISCORD_CLIENT_ID,
+# DISCORD_CLIENT_SECRET, PUSH_DOMAIN (public hostname for the web UI).
+# ACME_EMAIL is used for Let's Encrypt certificate issuance.
 services:
   db:
     image: mariadb:11
@@ -8,7 +12,7 @@ services:
       MARIADB_PASSWORD: ${MARIADB_PASSWORD:-elimination}
       MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-root}
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     volumes:
       - mariadb-data:/var/lib/mysql
     healthcheck:
@@ -17,5 +21,54 @@ services:
       timeout: 5s
       retries: 10
 
+  bot:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DISCORD_TOKEN: ${DISCORD_TOKEN:?set DISCORD_TOKEN in .env}
+      DATABASE_URL: mysql://elimination:${MARIADB_PASSWORD:-elimination}@db:3306/elimination
+      OWNER_ID: ${OWNER_ID:-}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:-}
+      WEB_PUBLIC_URL: ${WEB_PUBLIC_URL:-}
+      WEB_PORT: "3000"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.push-web.rule=Host(`${PUSH_DOMAIN:-localhost}`)
+      - traefik.http.routers.push-web.entrypoints=websecure
+      - traefik.http.routers.push-web.tls.certresolver=letsencrypt
+      - traefik.http.routers.push-web.service=push-web
+      - traefik.http.services.push-web.loadbalancer.server.port=3000
+      # HTTP -> HTTPS redirect
+      - traefik.http.routers.push-http.rule=Host(`${PUSH_DOMAIN:-localhost}`)
+      - traefik.http.routers.push-http.entrypoints=web
+      - traefik.http.routers.push-http.service=push-web
+      - traefik.http.routers.push-http.middlewares=redirect-to-https
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true
+
+  traefik:
+    image: traefik:v3.1
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@example.com}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-letsencrypt:/letsencrypt
+
 volumes:
   mariadb-data:
+  traefik-letsencrypt:

@@ -4,6 +4,8 @@ import { GatewayIntentBits } from "discord.js";
 import { DISCORD_TOKEN } from "./config";
 import { runMigrations } from "./lib/db";
 import { startActivityTracking } from "./lib/services/activity";
+import { startPushReminders } from "./lib/services/push-reminders";
+import { startWebServer } from "./web/server";
 
 async function main(): Promise<void> {
     await runMigrations();
@@ -16,6 +18,8 @@ async function main(): Promise<void> {
     });
 
     await client.login(DISCORD_TOKEN);
+    startPushReminders(client);
+    startWebServer();
 }
 
 main().catch((error) => {

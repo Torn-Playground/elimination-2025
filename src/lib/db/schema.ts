@@ -90,3 +90,45 @@ export const apiKeys = mysqlTable("api_keys", {
         .notNull()
         .$defaultFn(() => new Date()),
 });
+
+const ROLE_IDS_LEN = 2048;
+
+export const pushSettings = mysqlTable("push_settings", {
+    id: int("id").autoincrement().primaryKey(),
+    guildId: varchar("guild_id", { length: DISCORD_ID_LEN }),
+    channelId: varchar("channel_id", { length: DISCORD_ID_LEN }),
+    roleId: varchar("role_id", { length: DISCORD_ID_LEN }),
+    adminRoleIds: varchar("admin_role_ids", { length: ROLE_IDS_LEN }),
+    leadMinutes: int("lead_minutes").notNull().default(60),
+    start: datetime("start", { mode: "date" }),
+    end: datetime("end", { mode: "date" }),
+});
+
+export const pushSlots = mysqlTable("push_slots", {
+    start: datetime("start", { mode: "date" }).primaryKey(),
+    userId: varchar("user_id", { length: DISCORD_ID_LEN }),
+    claimedAt: datetime("claimed_at", { mode: "date" }),
+});
+
+export const pushReminders = mysqlTable(
+    "push_reminders",
+    {
+        start: datetime("start", { mode: "date" }).notNull(),
+        kind: varchar("kind", { length: 16 }).notNull(),
+        sentAt: datetime("sent_at", { mode: "date" })
+            .notNull()
+            .$defaultFn(() => new Date()),
+    },
+    (table) => [primaryKey({ columns: [table.start, table.kind] })],
+);
+
+export const webSessions = mysqlTable("web_sessions", {
+    token: varchar("token", { length: 64 }).primaryKey(),
+    userId: varchar("user_id", { length: DISCORD_ID_LEN }).notNull(),
+    username: varchar("username", { length: NAME_LEN }).notNull(),
+    avatar: varchar("avatar", { length: NAME_LEN }).notNull(),
+    createdAt: datetime("created_at", { mode: "date" })
+        .notNull()
+        .$defaultFn(() => new Date()),
+    expiresAt: datetime("expires_at", { mode: "date" }).notNull(),
+});

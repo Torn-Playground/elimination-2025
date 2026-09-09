@@ -1,0 +1,9 @@
+.git
+.idea
+data
+dist
+node_modules
+wip
+.env
+.env.*
+*.log
