@@ -392,7 +392,7 @@ function renderDayPicker(days, todayUTC) {
                     <span class="font-mono text-primary font-semibold">${new Date(nowMs()).toISOString().slice(11, 16)} UTC</span>
                 </div>
             </div>
-            <div class="grid grid-cols-2 sm:grid-cols-5 xl:grid-cols-8 gap-2 pt-0.5">
+            <div class="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-1.5 pt-0.5">
                 ${days.map((d, i) => dayPill(d, i, days.length, todayUTC)).join("")}
             </div>
         </div>`;
@@ -462,7 +462,7 @@ function dayPill(d, i, total, todayUTC) {
     else if (live) status = "";
 
     return `
-        <button data-action="select-day" data-day="${d.key}" class="flex flex-col items-center justify-center py-2 px-1.5 rounded-xl ${cls}">
+        <button data-action="select-day" data-day="${d.key}" class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl ${cls}">
             ${today && !past ? `<span class="absolute top-1 right-1 w-1.5 h-1.5 bg-secondary rounded-full"></span>` : ""}
             <span class="text-[9px] uppercase tracking-wider ${selected ? "text-secondary-fixed" : "text-outline"} font-semibold">Day ${d.dayNum}</span>
             <span class="text-xs ${selected ? "font-bold text-white" : "text-on-surface-variant font-semibold"} mt-0.5">${d.shortLabel}</span>
