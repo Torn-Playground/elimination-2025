@@ -127,7 +127,7 @@ export class GrantCommand extends Command {
         const message = await this.fetchMessage(guild, link.channelId, link.messageId);
         if (!message) {
             await interaction.editReply({
-                content: "Could not find that message (is it in a channel the bot can read?).",
+                content: `Could not find that message (is it in a channel the bot can read?) ${guild} ${link.channelId} ${link.messageId}.`,
             });
             return;
         }
