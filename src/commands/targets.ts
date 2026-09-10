@@ -44,6 +44,7 @@ function summarizeBoard(
     secondary: string | null,
     farms: string[],
     channelId?: string,
+    ping = false,
 ): string {
     const location = channelId ? ` in <#${channelId}>` : "";
     const lines = [`Primary: **${primary}**`];
@@ -52,6 +53,9 @@ function summarizeBoard(
     }
     if (farms.length > 0) {
         lines.push(`Farms: ${farms.map((farm) => `**${farm}**`).join(", ")}`);
+    }
+    if (ping) {
+        lines.push("@everyone");
     }
     return `Targets updated${location}:\n${lines.join("\n")}`;
 }
@@ -109,6 +113,12 @@ export class TargetsCommand extends Subcommand {
                                 .setDescription("The secondary target team")
                                 .setRequired(false)
                                 .setAutocomplete(true),
+                        )
+                        .addBooleanOption((option) =>
+                            option
+                                .setName("ping")
+                                .setDescription("Ping @everyone when posting the board")
+                                .setRequired(false),
                         ),
                 )
                 .addSubcommand((sub) =>
@@ -225,6 +235,7 @@ export class TargetsCommand extends Subcommand {
     private async refreshBoard(
         guild: Guild,
         channelId: string,
+        ping = false,
     ): Promise<{ channelId: string; messageId: string } | null> {
         const settings = await getGuildSettings(guild.id);
         const channel = await fetchTextChannel(guild, channelId);
@@ -242,7 +253,10 @@ export class TargetsCommand extends Subcommand {
             await this.deleteStoredMessage(channel, settings.targetsMessageId);
         }
 
-        const sent = await channel.send({ embeds: [embed] });
+        const sent = await channel.send({
+            content: ping ? "@everyone" : undefined,
+            embeds: [embed],
+        });
         await this.removeBoardCopies(channel, sent.id);
         await setTargetsLocation(guild.id, channel.id, sent.id);
         return { channelId: channel.id, messageId: sent.id };
@@ -256,6 +270,7 @@ export class TargetsCommand extends Subcommand {
         const primary = interaction.options.getString("primary", true).trim();
         // Omitted secondary clears the field: /targets set defines the full primary/secondary state.
         const secondary = interaction.options.getString("secondary")?.trim() || null;
+        const ping = interaction.options.getBoolean("ping") ?? false;
         if (!primary) {
             await interaction.editReply({ content: "The primary target cannot be empty." });
             return;
@@ -281,7 +296,7 @@ export class TargetsCommand extends Subcommand {
             setTargetPrimary(guild.id, primary),
             setTargetSecondary(guild.id, secondary),
         ]);
-        const board = await this.refreshBoard(guild, channelId);
+        const board = await this.refreshBoard(guild, channelId, ping);
         if (!board) {
             await interaction.editReply({
                 content: "Could not reach that channel to post the board.",
@@ -294,6 +309,7 @@ export class TargetsCommand extends Subcommand {
                 secondary,
                 await listTargetFarms(guild.id),
                 board.channelId,
+                ping,
             ),
         });
     }
