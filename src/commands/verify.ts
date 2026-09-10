@@ -1,10 +1,36 @@
 import { Subcommand } from "@sapphire/plugin-subcommands";
-import { type GuildMember, PermissionFlagsBits } from "discord.js";
+import {
+    type AutocompleteInteraction,
+    type GuildMember,
+    MessageFlags,
+    PermissionFlagsBits,
+} from "discord.js";
+import { listTrackedTeams } from "../lib/services/activity-chart";
 import { countApiKeys } from "../lib/services/api-keys";
 import { getGuildSettings } from "../lib/services/guild-settings";
+import { getKnownRoster } from "../lib/services/team-members";
 import { formatSuccessMessage, verify } from "../lib/services/verification";
 
 const PROCESSING_BUDGET_MS = 14 * 60 * 1000;
+const MAX_AUTOCOMPLETE_CHOICES = 25;
+const MAX_LISTED = 40;
+const TORN_ID_PATTERN = /\[(\d+)]\s*$/;
+
+function parseTornId(nickname: string | null): number | null {
+    const match = nickname?.match(TORN_ID_PATTERN);
+    return match ? Number(match[1]) : null;
+}
+
+function listSection(title: string, entries: string[]): string[] {
+    if (entries.length === 0) return [];
+    const shown = entries.slice(0, MAX_LISTED);
+    const more = entries.length - shown.length;
+    return [
+        title,
+        ...shown.map((entry) => `- ${entry}`),
+        ...(more > 0 ? [`…and ${more} more`] : []),
+    ];
+}
 
 export class VerifyCommand extends Subcommand {
     public constructor(context: Subcommand.LoaderContext, options: Subcommand.Options) {
@@ -17,6 +43,7 @@ export class VerifyCommand extends Subcommand {
             subcommands: [
                 { name: "member", chatInputRun: "chatInputMember" },
                 { name: "all", chatInputRun: "chatInputAll" },
+                { name: "validate", chatInputRun: "chatInputValidate" },
             ],
         });
     }
@@ -49,6 +76,26 @@ export class VerifyCommand extends Subcommand {
                                     "If true, verifies ALL members regardless of current verified status",
                                 )
                                 .setRequired(false),
+                        ),
+                )
+                .addSubcommand((sub) =>
+                    sub
+                        .setName("validate")
+                        .setDescription(
+                            "Check that members with a role are on a team's known roster",
+                        )
+                        .addRoleOption((option) =>
+                            option
+                                .setName("role")
+                                .setDescription("The role whose holders to check")
+                                .setRequired(true),
+                        )
+                        .addStringOption((option) =>
+                            option
+                                .setName("team")
+                                .setDescription("The elimination team to check against")
+                                .setRequired(true)
+                                .setAutocomplete(true),
                         ),
                 ),
         );
@@ -186,5 +233,75 @@ export class VerifyCommand extends Subcommand {
         } catch (error) {
             console.error("Failed to send verification summary:", error);
         }
+    }
+
+    public async chatInputValidate(interaction: Subcommand.ChatInputCommandInteraction) {
+        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+        const guild = interaction.guild;
+        if (!guild) return; // GuildOnly precondition
+
+        const role = interaction.options.getRole("role", true);
+        const teamName = interaction.options.getString("team", true).trim();
+        const roster = await getKnownRoster(teamName);
+        if (!roster) {
+            await interaction.editReply({
+                content: `No tracked team matches **${teamName}**. Try an autocomplete suggestion.`,
+            });
+            return;
+        }
+
+        await guild.members.fetch();
+        const holders = guild.members.cache.filter(
+            (member) => !member.user.bot && member.roles.cache.has(role.id),
+        );
+
+        const known = new Set(roster.members.map((member) => member.userId));
+        let matchedCount = 0;
+        const mismatched: string[] = [];
+        const unresolved: string[] = [];
+
+        for (const member of holders.values()) {
+            const tornId = parseTornId(member.nickname);
+            if (tornId === null) {
+                unresolved.push(member.user.username);
+            } else if (known.has(tornId)) {
+                matchedCount++;
+            } else {
+                mismatched.push(`${member.nickname ?? member.user.username}`);
+            }
+        }
+
+        const lines = [
+            `**Validation: ${role.name} vs ${teamName}**`,
+            `Role holders: ${holders.size} (bots excluded)`,
+            `Roster size: ${roster.members.length}`,
+            `Matched: ${matchedCount}`,
+            `Mismatched: ${mismatched.length}`,
+            `Unresolved (no Torn ID in nickname): ${unresolved.length}`,
+            ...listSection(`\n❌ Not on **${teamName}**:`, mismatched),
+            ...listSection("\n⚠ Could not read Torn ID:", unresolved),
+        ];
+        if (holders.size > 0 && mismatched.length === 0 && unresolved.length === 0) {
+            lines.push(`\n✅ All role holders are on **${teamName}**.`);
+        }
+
+        await interaction.editReply({ content: lines.join("\n").slice(0, 2000) });
+    }
+
+    public override async autocompleteRun(interaction: AutocompleteInteraction) {
+        const focused = interaction.options.getFocused(true);
+        if (focused.name !== "team") {
+            await interaction.respond([]);
+            return;
+        }
+
+        const fragment = String(focused.value).toLowerCase();
+        const names = await listTrackedTeams();
+        const matches = fragment
+            ? names.filter((name) => name.toLowerCase().includes(fragment))
+            : names;
+        await interaction.respond(
+            matches.slice(0, MAX_AUTOCOMPLETE_CHOICES).map((name) => ({ name, value: name })),
+        );
     }
 }

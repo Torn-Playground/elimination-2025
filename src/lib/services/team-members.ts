@@ -1,8 +1,12 @@
 import { Cron } from "croner";
-import { and, asc, eq, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, lt, sql } from "drizzle-orm";
 import { TEAM_MEMBERS_CRON } from "../../config";
 import { db } from "../db";
-import { eliminationTeamMembers as members, eliminationTeamMemberSync as sync } from "../db/schema";
+import {
+    eliminationTeamMembers as members,
+    eliminationTeamSnapshots as snapshots,
+    eliminationTeamMemberSync as sync,
+} from "../db/schema";
 import {
     type EliminationTeamMember,
     getEliminationStandings,
@@ -79,20 +83,19 @@ type SyncCursor = typeof sync.$inferSelect;
 async function syncTeamList(): Promise<void> {
     const standings = await getEliminationStandings();
     if (!standings || standings.length === 0) return;
-    // ponytail: keeps dead teams in rotation forever; prune when elimination cycles turn over.
     await db
         .insert(sync)
         .ignore()
         .values(standings.map((team) => ({ teamId: team.id })));
 }
 
-function pickNextTeam(): Promise<SyncCursor | undefined> {
-    return db
+async function pickNextTeam(): Promise<SyncCursor | undefined> {
+    const rows = await db
         .select()
         .from(sync)
         .orderBy(sql`${sync.refreshedAt} IS NOT NULL`, asc(sync.refreshedAt), asc(sync.teamId))
-        .limit(1)
-        .then((rows) => rows[0]);
+        .limit(1);
+    return rows[0];
 }
 
 async function refreshPage(cursor: SyncCursor): Promise<void> {
@@ -188,4 +191,25 @@ function reportFailure(message: string): void {
 
 function reportError(error: unknown): void {
     reportFailure(error instanceof Error ? error.message : String(error));
+}
+
+export type KnownRoster = {
+    teamId: number;
+    members: { userId: number; name: string }[];
+};
+
+export async function getKnownRoster(teamName: string): Promise<KnownRoster | null> {
+    const [team] = await db
+        .select({ teamId: snapshots.teamId })
+        .from(snapshots)
+        .where(sql`lower(${snapshots.name}) = ${teamName.toLowerCase()}`)
+        .orderBy(desc(snapshots.observedAt))
+        .limit(1);
+    if (!team) return null;
+
+    const roster = await db
+        .select({ userId: members.userId, name: members.name })
+        .from(members)
+        .where(eq(members.teamId, team.teamId));
+    return { teamId: team.teamId, members: roster };
 }
