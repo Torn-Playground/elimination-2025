@@ -470,14 +470,38 @@ function yTicks(maxValue: number): { top: number; ticks: number[] } {
     return { top, ticks };
 }
 
-function xTickPositions(from: number, to: number): number[] {
-    if (from >= to) return [MARGIN_LEFT + PLOT_WIDTH / 2];
-    const count = Math.min(6, Math.max(2, Math.floor(PLOT_WIDTH / 130)));
-    const positions: number[] = [];
-    for (let i = 0; i < count; i++) {
-        positions.push(MARGIN_LEFT + PLOT_WIDTH * (i / (count - 1)));
+// Steps that keep labels on :00/:15/:30/:45: all divide a day, or are whole days.
+const HOUR = 60 * 60_000;
+const DAY = 24 * HOUR;
+const X_TICK_STEPS_MS = [
+    15 * 60_000,
+    30 * 60_000,
+    HOUR,
+    2 * HOUR,
+    3 * HOUR,
+    4 * HOUR,
+    6 * HOUR,
+    12 * HOUR,
+    DAY,
+    2 * DAY,
+    7 * DAY,
+    14 * DAY,
+    30 * DAY,
+];
+
+// Snapped to the step grid (epoch is midnight UTC), so labels land on quarter-hours.
+function xTickTimes(from: number, to: number): number[] {
+    if (from >= to) return [from];
+    const span = to - from;
+    const target = 6;
+    const step =
+        X_TICK_STEPS_MS.find((candidate) => span / candidate <= target) ??
+        Math.ceil(span / target / DAY) * DAY;
+    const ticks: number[] = [];
+    for (let t = Math.ceil(from / step) * step; t <= to; t += step) {
+        ticks.push(t);
     }
-    return positions;
+    return ticks;
 }
 
 async function renderActivityChart(options: {
@@ -527,7 +551,8 @@ async function renderActivityChart(options: {
         ctx.moveTo(MARGIN_LEFT, y);
         ctx.lineTo(MARGIN_LEFT + PLOT_WIDTH, y);
     }
-    for (const x of xTickPositions(options.from, options.to)) {
+    for (const t of xTickTimes(options.from, options.to)) {
+        const x = xOf(t);
         ctx.moveTo(x, MARGIN_TOP);
         ctx.lineTo(x, MARGIN_TOP + PLOT_HEIGHT);
     }
@@ -541,15 +566,11 @@ async function renderActivityChart(options: {
         drawLabel(ctx, label, MARGIN_LEFT - 12, yOf(tick), 13, TEXT_COLOR, "right", "middle");
     }
 
-    const xPositions = xTickPositions(options.from, options.to);
-    const labelEvery = Math.max(1, Math.ceil(xPositions.length / 6));
-    for (let i = 0; i < Math.max(1, xPositions.length - 1); i += labelEvery) {
-        const x = xPositions[i];
-        const t = span <= 0 ? options.from : options.from + span * (i / (xPositions.length - 1));
+    for (const t of xTickTimes(options.from, options.to)) {
         drawLabel(
             ctx,
             timeLabel(t, span),
-            x,
+            xOf(t),
             MARGIN_TOP + PLOT_HEIGHT + 20,
             13,
             TEXT_COLOR,
@@ -665,7 +686,8 @@ async function renderAllTeamsChart(options: {
         ctx.moveTo(MARGIN_LEFT, y);
         ctx.lineTo(MARGIN_LEFT + PLOT_WIDTH, y);
     }
-    for (const x of xTickPositions(options.from, options.to)) {
+    for (const t of xTickTimes(options.from, options.to)) {
+        const x = xOf(t);
         ctx.moveTo(x, MARGIN_TOP);
         ctx.lineTo(x, MARGIN_TOP + PLOT_HEIGHT);
     }
@@ -679,15 +701,11 @@ async function renderAllTeamsChart(options: {
         drawLabel(ctx, label, MARGIN_LEFT - 12, yOf(tick), 13, TEXT_COLOR, "right", "middle");
     }
 
-    const xPositions = xTickPositions(options.from, options.to);
-    const labelEvery = Math.max(1, Math.ceil(xPositions.length / 6));
-    for (let i = 0; i < Math.max(1, xPositions.length - 1); i += labelEvery) {
-        const x = xPositions[i];
-        const t = span <= 0 ? options.from : options.from + span * (i / (xPositions.length - 1));
+    for (const t of xTickTimes(options.from, options.to)) {
         drawLabel(
             ctx,
             timeLabel(t, span),
-            x,
+            xOf(t),
             MARGIN_TOP + PLOT_HEIGHT + 20,
             13,
             TEXT_COLOR,
