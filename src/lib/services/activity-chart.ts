@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import path from "node:path";
 import { PassThrough } from "node:stream";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import * as PImage from "pureimage";
 import { db } from "../db";
 import {
@@ -190,9 +190,11 @@ function sampleSeries(points: SeriesPoint[]): SeriesPoint[] {
 
 // Render the chart for <team> and cache the PNG keyed by (team, stat). A new snapshot
 // for the team moves last_observed_at, which makes any stored image stale.
+// A <since> window bypasses the cache: the cached image is keyed without the window.
 export async function getActivityChart(
     teamName: string,
     stat: ActivityStat,
+    since?: Date,
 ): Promise<ActivityChartResult | null> {
     const [resolved] = await db
         .select({ teamId: snapshots.teamId, name: snapshots.name })
@@ -206,7 +208,11 @@ export async function getActivityChart(
     const rows = await db
         .select({ t: snapshots.observedAt, v: column })
         .from(snapshots)
-        .where(eq(snapshots.teamId, resolved.teamId))
+        .where(
+            since
+                ? and(eq(snapshots.teamId, resolved.teamId), gte(snapshots.observedAt, since))
+                : eq(snapshots.teamId, resolved.teamId),
+        )
         .orderBy(asc(snapshots.observedAt));
     if (rows.length === 0) return null;
 
@@ -214,23 +220,25 @@ export async function getActivityChart(
     const last = rows[rows.length - 1];
     const to = last.t.getTime();
 
-    const [cached] = await db
-        .select()
-        .from(cacheTable)
-        .where(and(eq(cacheTable.teamId, resolved.teamId), eq(cacheTable.stat, stat)))
-        .limit(1);
-    if (cached && cached.lastObservedAt.getTime() === to) {
-        return {
-            png: Buffer.from(cached.png as Uint8Array),
-            cached: true,
-            stat,
-            resolvedName: resolved.name,
-            count: rows.length,
-            from: first.t.getTime(),
-            to,
-            firstValue: first.v,
-            lastValue: last.v,
-        };
+    if (!since) {
+        const [cached] = await db
+            .select()
+            .from(cacheTable)
+            .where(and(eq(cacheTable.teamId, resolved.teamId), eq(cacheTable.stat, stat)))
+            .limit(1);
+        if (cached && cached.lastObservedAt.getTime() === to) {
+            return {
+                png: Buffer.from(cached.png as Uint8Array),
+                cached: true,
+                stat,
+                resolvedName: resolved.name,
+                count: rows.length,
+                from: first.t.getTime(),
+                to,
+                firstValue: first.v,
+                lastValue: last.v,
+            };
+        }
     }
 
     let maxValue = 0;
@@ -252,12 +260,14 @@ export async function getActivityChart(
     });
 
     const lastObservedAt = new Date(to);
-    await db
-        .insert(cacheTable)
-        .values({ teamId: resolved.teamId, stat, lastObservedAt, png })
-        .onDuplicateKeyUpdate({
-            set: { lastObservedAt, png },
-        });
+    if (!since) {
+        await db
+            .insert(cacheTable)
+            .values({ teamId: resolved.teamId, stat, lastObservedAt, png })
+            .onDuplicateKeyUpdate({
+                set: { lastObservedAt, png },
+            });
+    }
 
     return {
         png,
@@ -272,10 +282,13 @@ export async function getActivityChart(
     };
 }
 
+// A <since> window bypasses the cache: the cached image is keyed without the window.
 export async function getAllTeamsActivityChart(
     stat: ActivityStat,
+    since?: Date,
 ): Promise<AllTeamsActivityChartResult | null> {
     const column = sql<number>`${statColumn(stat)}`;
+    const window = since ? gte(snapshots.observedAt, since) : undefined;
 
     const [agg] = await db
         .select({
@@ -283,25 +296,33 @@ export async function getAllTeamsActivityChart(
             teamCount: sql<number>`count(distinct ${snapshots.teamId})`,
             eliminatedCount: sql<number>`count(distinct if(${snapshots.eliminated}, ${snapshots.teamId}, null))`,
         })
-        .from(snapshots);
+        .from(snapshots)
+        .where(window);
     if (!agg || agg.pointCount === 0) return null;
 
-    // Select the column itself (not an aggregate) so drizzle decodes it into a Date.
-    const [latestRow] = await db
-        .select({ t: snapshots.observedAt })
-        .from(snapshots)
-        .orderBy(desc(snapshots.observedAt))
-        .limit(1);
-    const latestObservedAt = latestRow.t;
+    let latestObservedAt: Date | null = null;
+    let cachedPng: Buffer | null = null;
+    if (!since) {
+        // Select the column itself (not an aggregate) so drizzle decodes it into a Date.
+        const [latestRow] = await db
+            .select({ t: snapshots.observedAt })
+            .from(snapshots)
+            .orderBy(desc(snapshots.observedAt))
+            .limit(1);
+        latestObservedAt = latestRow.t;
 
-    const [cached] = await db
-        .select()
-        .from(cacheTable)
-        .where(and(eq(cacheTable.teamId, ALL_TEAMS_TEAM_ID), eq(cacheTable.stat, stat)))
-        .limit(1);
-    if (cached && cached.lastObservedAt.getTime() === latestObservedAt.getTime()) {
+        const [cached] = await db
+            .select()
+            .from(cacheTable)
+            .where(and(eq(cacheTable.teamId, ALL_TEAMS_TEAM_ID), eq(cacheTable.stat, stat)))
+            .limit(1);
+        if (cached && cached.lastObservedAt.getTime() === latestObservedAt.getTime()) {
+            cachedPng = Buffer.from(cached.png as Uint8Array);
+        }
+    }
+    if (cachedPng) {
         return {
-            png: Buffer.from(cached.png as Uint8Array),
+            png: cachedPng,
             cached: true,
             stat,
             teamCount: agg.teamCount,
@@ -319,6 +340,7 @@ export async function getAllTeamsActivityChart(
             v: column,
         })
         .from(snapshots)
+        .where(window)
         .orderBy(asc(snapshots.teamId), asc(snapshots.observedAt));
 
     const { series, maxValue, from, to } = buildTeamSeries(rows);
@@ -335,17 +357,19 @@ export async function getAllTeamsActivityChart(
         to,
     });
 
-    await db
-        .insert(cacheTable)
-        .values({
-            teamId: ALL_TEAMS_TEAM_ID,
-            stat,
-            lastObservedAt: latestObservedAt,
-            png,
-        })
-        .onDuplicateKeyUpdate({
-            set: { lastObservedAt: latestObservedAt, png },
-        });
+    if (!since && latestObservedAt) {
+        await db
+            .insert(cacheTable)
+            .values({
+                teamId: ALL_TEAMS_TEAM_ID,
+                stat,
+                lastObservedAt: latestObservedAt,
+                png,
+            })
+            .onDuplicateKeyUpdate({
+                set: { lastObservedAt: latestObservedAt, png },
+            });
+    }
 
     return {
         png,

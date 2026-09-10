@@ -10,6 +10,36 @@ import {
 
 const MAX_AUTOCOMPLETE_CHOICES = 25;
 
+const TIME_UNITS: Record<string, number> = {
+    m: 60_000,
+    min: 60_000,
+    mins: 60_000,
+    minute: 60_000,
+    minutes: 60_000,
+    h: 3_600_000,
+    hr: 3_600_000,
+    hrs: 3_600_000,
+    hour: 3_600_000,
+    hours: 3_600_000,
+    d: 86_400_000,
+    day: 86_400_000,
+    days: 86_400_000,
+};
+
+function parseTimeframe(input: string): number | null {
+    const match = input
+        .trim()
+        .toLowerCase()
+        .match(/^(\d+(?:\.\d+)?)\s*([a-z]+)$/);
+    if (!match) return null;
+
+    const unit = TIME_UNITS[match[2]];
+    const amount = Number(match[1]);
+    if (!unit || !Number.isFinite(amount) || amount <= 0) return null;
+
+    return amount * unit;
+}
+
 const STAT_DISPLAY: Record<ActivityStat, string> = {
     score: "Score",
     wins: "Wins",
@@ -61,6 +91,14 @@ export class ActivityCommand extends Command {
                                 "Team to chart. Leave empty for one chart with all teams.",
                             )
                             .setAutocomplete(true),
+                    )
+                    .addStringOption((option) =>
+                        option
+                            .setName("timeframe")
+                            .setDescription(
+                                'Limit history to a recent period, e.g. "4 hours" or "2 days".',
+                            )
+                            .setRequired(false),
                     ),
             { idHints: ["1546282527478644796"] },
         );
@@ -72,13 +110,26 @@ export class ActivityCommand extends Command {
         const teamName = interaction.options.getString("team");
         const stat = interaction.options.getString("stat", true) as ActivityStat;
 
+        const timeframe = interaction.options.getString("timeframe");
+        let since: Date | undefined;
+        if (timeframe) {
+            const windowMs = parseTimeframe(timeframe);
+            if (windowMs === null) {
+                await interaction.editReply({
+                    content: `Could not parse timeframe \`${timeframe}\`. Try formats like \`4 hours\`, \`30 minutes\`, or \`2 days\`.`,
+                });
+                return;
+            }
+            since = new Date(Date.now() - windowMs);
+        }
+
         try {
             if (teamName) {
-                await this.replyTeamChart(interaction, teamName, stat);
+                await this.replyTeamChart(interaction, teamName, stat, since, timeframe);
                 return;
             }
 
-            const chart = await getAllTeamsActivityChart(stat);
+            const chart = await getAllTeamsActivityChart(stat, since);
             if (!chart) {
                 await interaction.editReply({
                     content: "No tracked history yet.",
@@ -87,7 +138,7 @@ export class ActivityCommand extends Command {
             }
 
             const summary = [
-                `**All teams** — ${STAT_DISPLAY[stat]} history (${chart.teamCount} teams${chart.eliminatedCount > 0 ? `, ${chart.eliminatedCount} eliminated` : ""}, ${formatNumber(chart.pointCount)} data points)${chart.cached ? " · *cached image*" : ""}`,
+                `**All teams** — ${STAT_DISPLAY[stat]} history (${chart.teamCount} teams${chart.eliminatedCount > 0 ? `, ${chart.eliminatedCount} eliminated` : ""}, ${formatNumber(chart.pointCount)} data points)${timeframe ? ` · last ${timeframe}` : ""}${chart.cached ? " · *cached image*" : ""}`,
                 "Each line stops at that team's elimination.",
             ].join("\n");
 
@@ -107,17 +158,19 @@ export class ActivityCommand extends Command {
         interaction: ChatInputCommandInteraction,
         teamName: string,
         stat: ActivityStat,
+        since: Date | undefined,
+        timeframe: string | null,
     ): Promise<void> {
-        const chart = await getActivityChart(teamName, stat);
+        const chart = await getActivityChart(teamName, stat, since);
         if (!chart) {
             await interaction.editReply({
-                content: `No tracked history for a team named "${teamName}" yet.`,
+                content: `No tracked history for a team named "${teamName}"${timeframe ? ` in the last ${timeframe}` : ""} yet.`,
             });
             return;
         }
 
         const summary = [
-            `**${chart.resolvedName}** — ${STAT_DISPLAY[stat]} history (${formatNumber(chart.count)} data points)`,
+            `**${chart.resolvedName}** — ${STAT_DISPLAY[stat]} history (${formatNumber(chart.count)} data points)${timeframe ? ` · last ${timeframe}` : ""}`,
             `Earliest: ${formatNumber(chart.firstValue)} · Latest: **${formatNumber(chart.lastValue)}**${chart.cached ? " · *cached image*" : ""}`,
         ].join("\n");
 
