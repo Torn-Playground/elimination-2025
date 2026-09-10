@@ -427,6 +427,27 @@ function drawLabel(
     ctx.fillText(text, textX, y);
 }
 
+const AXIS_LABEL_SIZE = 13;
+const UTC_LABEL_GAP = 6;
+
+// Draw time labels, skipping any whose box would collide with the right-aligned "UTC" marker.
+function drawTimeLabels(
+    ctx: PImage.Context,
+    times: number[],
+    xOf: (t: number) => number,
+    span: number,
+): void {
+    const y = MARGIN_TOP + PLOT_HEIGHT + 20;
+    ctx.font = `${AXIS_LABEL_SIZE}px ${FONT_FAMILY}`;
+    const utcLeft = WIDTH - MARGIN_RIGHT - ctx.measureText("UTC").width;
+    for (const t of times) {
+        const text = timeLabel(t, span);
+        const halfWidth = ctx.measureText(text).width / 2;
+        if (xOf(t) + halfWidth > utcLeft - UTC_LABEL_GAP) continue;
+        drawLabel(ctx, text, xOf(t), y, AXIS_LABEL_SIZE, TEXT_COLOR, "center", "middle");
+    }
+}
+
 function pad2(value: number): string {
     return String(value).padStart(2, "0");
 }
@@ -566,18 +587,7 @@ async function renderActivityChart(options: {
         drawLabel(ctx, label, MARGIN_LEFT - 12, yOf(tick), 13, TEXT_COLOR, "right", "middle");
     }
 
-    for (const t of xTickTimes(options.from, options.to)) {
-        drawLabel(
-            ctx,
-            timeLabel(t, span),
-            xOf(t),
-            MARGIN_TOP + PLOT_HEIGHT + 20,
-            13,
-            TEXT_COLOR,
-            "center",
-            "middle",
-        );
-    }
+    drawTimeLabels(ctx, xTickTimes(options.from, options.to), xOf, span);
 
     ctx.strokeStyle = accent;
     ctx.lineWidth = 2.2;
@@ -701,18 +711,7 @@ async function renderAllTeamsChart(options: {
         drawLabel(ctx, label, MARGIN_LEFT - 12, yOf(tick), 13, TEXT_COLOR, "right", "middle");
     }
 
-    for (const t of xTickTimes(options.from, options.to)) {
-        drawLabel(
-            ctx,
-            timeLabel(t, span),
-            xOf(t),
-            MARGIN_TOP + PLOT_HEIGHT + 20,
-            13,
-            TEXT_COLOR,
-            "center",
-            "middle",
-        );
-    }
+    drawTimeLabels(ctx, xTickTimes(options.from, options.to), xOf, span);
 
     for (const team of options.series) {
         ctx.strokeStyle = team.color;
