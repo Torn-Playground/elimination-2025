@@ -66,6 +66,30 @@ export const eliminationTeamSnapshots = mysqlTable(
     (table) => [primaryKey({ columns: [table.teamId, table.observedAt] })],
 );
 
+export const eliminationTeamMembers = mysqlTable(
+    "elimination_team_members",
+    {
+        teamId: int("team_id").notNull(),
+        userId: int("user_id").notNull(),
+        name: varchar("name", { length: NAME_LEN }).notNull(),
+        level: int("level").notNull(),
+        lastAction: varchar("last_action", { length: 16 }).notNull(),
+        lastActionTimestamp: bigint("last_action_timestamp", { mode: "number" }),
+        status: varchar("status", { length: NAME_LEN }).notNull(),
+        attacks: int("attacks").notNull(),
+        score: int("score").notNull(),
+        refreshedAt: datetime("refreshed_at", { mode: "date", fsp: 3 }).notNull(),
+    },
+    (table) => [primaryKey({ columns: [table.teamId, table.userId] })],
+);
+
+export const eliminationTeamMemberSync = mysqlTable("elimination_team_member_sync", {
+    teamId: int("team_id").primaryKey(),
+    nextOffset: int("next_offset").notNull().default(0),
+    refreshStartedAt: datetime("refresh_started_at", { mode: "date", fsp: 3 }),
+    refreshedAt: datetime("refreshed_at", { mode: "date", fsp: 3 }),
+});
+
 export const activityChartCache = mysqlTable(
     "activity_chart_cache",
     {

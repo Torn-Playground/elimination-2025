@@ -16,6 +16,8 @@ export const TORN_VERIFY_URL =
 
 export const ELIMINATION_CRON = process.env.ELIMINATION_CRON ?? "10 */5 * * * *";
 
+export const TEAM_MEMBERS_CRON = process.env.TEAM_MEMBERS_CRON ?? "* * * * *";
+
 export const OWNER_ID = process.env.OWNER_ID ?? null;
 export const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID ?? null;
 export const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET ?? null;

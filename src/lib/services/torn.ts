@@ -133,6 +133,68 @@ export type EliminationTeamStanding = {
     eliminatedTimestamp: number | null;
 };
 
+export type EliminationTeamMember = {
+    id: number;
+    name: string;
+    level: number;
+    lastAction: string;
+    lastActionTimestamp: number | null;
+    status: string;
+    attacks: number;
+    score: number;
+};
+
+export type EliminationTeamMembersPage = {
+    members: EliminationTeamMember[];
+    hasMore: boolean;
+};
+
+export async function getEliminationTeamMembers(
+    teamId: number,
+    offset: number,
+    limit: number,
+): Promise<EliminationTeamMembersPage | null> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const apiKey = await nextApiKey();
+        if (!apiKey) return null;
+
+        const data = await API_CLIENT.getV2({
+            section: "torn",
+            selections: ["eliminationteam"],
+            id: teamId,
+            params: { offset: String(offset), limit: String(limit) },
+            key: apiKey.key,
+        });
+
+        if ("error" in data) {
+            if (data.error.code === TornApiError.CLOSED_TEMPORARILY) {
+                return null;
+            }
+            if (RETRYABLE_ERROR_CODES.has(data.error.code)) {
+                continue;
+            }
+            throw new Error(
+                `Torn rejected the eliminationteam request (code ${data.error.code}): ${data.error.error}`,
+            );
+        }
+
+        return {
+            members: data.eliminationteam.map((member) => ({
+                id: member.id,
+                name: member.name,
+                level: member.level,
+                lastAction: member.last_action.status,
+                lastActionTimestamp: member.last_action.timestamp,
+                status: member.status.description,
+                attacks: member.attacks,
+                score: member.score,
+            })),
+            hasMore: data._metadata.links.next !== null,
+        };
+    }
+    throw new Error("Torn eliminationteam request failed after retries.");
+}
+
 export async function getEliminationStandings(): Promise<EliminationTeamStanding[] | null> {
     for (let attempt = 0; attempt < 3; attempt++) {
         const apiKey = await nextApiKey();

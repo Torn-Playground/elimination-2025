@@ -5,11 +5,13 @@ import { DISCORD_TOKEN } from "./config";
 import { runMigrations } from "./lib/db";
 import { startActivityTracking } from "./lib/services/activity";
 import { startPushReminders } from "./lib/services/push-reminders";
+import { startTeamMemberSync } from "./lib/services/team-members";
 import { startWebServer } from "./web/server";
 
 async function main(): Promise<void> {
     await runMigrations();
     startActivityTracking();
+    startTeamMemberSync();
 
     const client = new SapphireClient({
         intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
