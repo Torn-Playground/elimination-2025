@@ -96,6 +96,14 @@ export class VerifyCommand extends Subcommand {
                                 .setDescription("The elimination team to check against")
                                 .setRequired(true)
                                 .setAutocomplete(true),
+                        )
+                        .addBooleanOption((option) =>
+                            option
+                                .setName("remove")
+                                .setDescription(
+                                    "If true, remove the role from members not on the roster",
+                                )
+                                .setRequired(false),
                         ),
                 ),
         );
@@ -257,7 +265,7 @@ export class VerifyCommand extends Subcommand {
 
         const known = new Set(roster.members.map((member) => member.userId));
         let matchedCount = 0;
-        const mismatched: string[] = [];
+        const mismatched: { member: GuildMember; label: string }[] = [];
         const unresolved: string[] = [];
 
         for (const member of holders.values()) {
@@ -267,7 +275,21 @@ export class VerifyCommand extends Subcommand {
             } else if (known.has(tornId)) {
                 matchedCount++;
             } else {
-                mismatched.push(`${member.nickname ?? member.user.username}`);
+                mismatched.push({ member, label: member.nickname ?? member.user.username });
+            }
+        }
+
+        let removedCount = 0;
+        let failedRemovals = 0;
+        if (interaction.options.getBoolean("remove") ?? false) {
+            for (const { member } of mismatched) {
+                try {
+                    await member.roles.remove(role.id);
+                    removedCount++;
+                } catch (error) {
+                    failedRemovals++;
+                    console.warn(`Failed to remove role from ${member.id}:`, error);
+                }
             }
         }
 
@@ -278,7 +300,15 @@ export class VerifyCommand extends Subcommand {
             `Matched: ${matchedCount}`,
             `Mismatched: ${mismatched.length}`,
             `Unresolved (no Torn ID in nickname): ${unresolved.length}`,
-            ...listSection(`\n❌ Not on **${teamName}**:`, mismatched),
+            ...(removedCount > 0 || failedRemovals > 0
+                ? [
+                      `Roles removed: ${removedCount}${failedRemovals > 0 ? ` (${failedRemovals} failed)` : ""}`,
+                  ]
+                : []),
+            ...listSection(
+                `\n❌ Not on **${teamName}**:`,
+                mismatched.map((entry) => entry.label),
+            ),
             ...listSection("\n⚠ Could not read Torn ID:", unresolved),
         ];
         if (holders.size > 0 && mismatched.length === 0 && unresolved.length === 0) {
