@@ -1,5 +1,3 @@
-"use strict";
-
 const HOUR = 3600000;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -515,7 +513,6 @@ function slotCard(slot) {
                     <div class="flex items-start justify-between gap-2">
                         <div>
                             <div class="text-sm font-bold text-outline tracking-tight">${range} ${tzSuffix}</div>
-                            <div class="text-[11px] text-outline/80 mt-0.5">1h Window</div>
                         </div>
                         <span class="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-surface-container text-outline border border-outline-variant/20 uppercase tracking-wider">${icon("lock", "text-[12px]")} Locked</span>
                     </div>
@@ -606,7 +603,6 @@ function slotCard(slot) {
                 <div class="flex items-start justify-between gap-2">
                     <div>
                         <div class="text-sm font-bold ${free ? "text-on-surface" : slot.mine ? "text-secondary" : "text-on-surface"} tracking-tight">${range} ${tzSuffix}</div>
-                        <div class="text-[11px] text-outline mt-0.5">1h Window</div>
                     </div>
                     ${badge}
                 </div>
