@@ -5,10 +5,10 @@ import {
     MessageFlags,
     PermissionFlagsBits,
 } from "discord.js";
-import { listTrackedTeams } from "../lib/services/activity-chart";
 import { countApiKeys } from "../lib/services/api-keys";
 import { getGuildSettings } from "../lib/services/guild-settings";
 import { getKnownRoster } from "../lib/services/team-members";
+import { findTeamRole, listTeamRoles } from "../lib/services/team-roles";
 import { formatSuccessMessage, verify } from "../lib/services/verification";
 
 const PROCESSING_BUDGET_MS = 14 * 60 * 1000;
@@ -82,13 +82,7 @@ export class VerifyCommand extends Subcommand {
                     sub
                         .setName("validate")
                         .setDescription(
-                            "Check that members with a role are on a team's known roster",
-                        )
-                        .addRoleOption((option) =>
-                            option
-                                .setName("role")
-                                .setDescription("The role whose holders to check")
-                                .setRequired(true),
+                            "Check that holders of a team's mapped role are on its known roster",
                         )
                         .addStringOption((option) =>
                             option
@@ -248,8 +242,22 @@ export class VerifyCommand extends Subcommand {
         const guild = interaction.guild;
         if (!guild) return; // GuildOnly precondition
 
-        const role = interaction.options.getRole("role", true);
         const teamName = interaction.options.getString("team", true).trim();
+        const mapping = await findTeamRole(guild.id, teamName);
+        if (!mapping) {
+            await interaction.editReply({
+                content: `No role mapped for **${teamName}**. Add one with \`/config team-roles add\`.`,
+            });
+            return;
+        }
+        const role = await guild.roles.fetch(mapping.roleId);
+        if (!role) {
+            await interaction.editReply({
+                content: `The mapped role for **${teamName}** no longer exists in this server.`,
+            });
+            return;
+        }
+
         const roster = await getKnownRoster(teamName);
         if (!roster) {
             await interaction.editReply({
@@ -258,7 +266,9 @@ export class VerifyCommand extends Subcommand {
             return;
         }
 
-        await guild.members.fetch();
+        if (guild.members.cache.size < guild.memberCount) {
+            await guild.members.fetch();
+        }
         const holders = guild.members.cache.filter(
             (member) => !member.user.bot && member.roles.cache.has(role.id),
         );
@@ -282,13 +292,18 @@ export class VerifyCommand extends Subcommand {
         let removedCount = 0;
         let failedRemovals = 0;
         if (interaction.options.getBoolean("remove") ?? false) {
-            for (const { member } of mismatched) {
-                try {
-                    await member.roles.remove(role.id);
+            const results = await Promise.allSettled(
+                mismatched.map(({ member }) => member.roles.remove(role.id)),
+            );
+            for (const [index, result] of results.entries()) {
+                if (result.status === "fulfilled") {
                     removedCount++;
-                } catch (error) {
+                } else {
                     failedRemovals++;
-                    console.warn(`Failed to remove role from ${member.id}:`, error);
+                    console.warn(
+                        `Failed to remove role from ${mismatched[index].member.id}:`,
+                        result.reason,
+                    );
                 }
             }
         }
@@ -325,8 +340,14 @@ export class VerifyCommand extends Subcommand {
             return;
         }
 
+        const guildId = interaction.guildId;
+        if (!guildId) {
+            await interaction.respond([]);
+            return;
+        }
+
         const fragment = String(focused.value).toLowerCase();
-        const names = await listTrackedTeams();
+        const names = (await listTeamRoles(guildId)).map((entry) => entry.name);
         const matches = fragment
             ? names.filter((name) => name.toLowerCase().includes(fragment))
             : names;
